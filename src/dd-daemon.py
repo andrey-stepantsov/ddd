@@ -6,9 +6,10 @@ import time
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
+# --- Configuration Constants ---
 CONFIG_FILE = ".dd-config"
-TRIGGER_FILE = ".build_request"
-LOG_FILE = ".build.log"
+TRIGGER_FILE = ".ddd.build.request"  # <--- RENAMED
+LOG_FILE = ".ddd.build.log"          # <--- RENAMED
 
 class RequestHandler(FileSystemEventHandler):
     def __init__(self):
@@ -51,7 +52,7 @@ class RequestHandler(FileSystemEventHandler):
                 f.write(f"[+] Executing: {build_cmd}\n")
                 f.flush()
                 
-                # Capture output to file AND print to stdout (optional, but helpful for human)
+                # Capture output to file AND print to stdout
                 build_res = subprocess.run(
                     build_cmd, 
                     shell=True, 
@@ -60,7 +61,7 @@ class RequestHandler(FileSystemEventHandler):
                 )
 
                 if build_res.returncode != 0:
-                    print("[-] Build Failed. Check .build.log")
+                    print(f"[-] Build Failed. Check {LOG_FILE}")
                     f.write("\n[-] Build FAILED.\n")
                     return
             

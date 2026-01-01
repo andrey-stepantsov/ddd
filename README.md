@@ -17,7 +17,7 @@ The system runs as three distinct "Heads" in three terminals:
 
 2.  **The Watcher (`dd-daemon`)**
     * **Role:** The Nervous System.
-    * **Job:** Watches for the specific signal (`.build_request`), triggers the build inside the container, pipes output to logs, and runs verification.
+    * **Job:** Watches for the specific signal (`.ddd.build.request`), triggers the build inside the container, pipes output to logs, and runs verification.
     * **Mechanism:** Python script on Host using `watchdog`.
 
 3.  **The Coder (AI Agent / You)**
@@ -30,9 +30,9 @@ The system runs as three distinct "Heads" in three terminals:
 To prevent infinite loops and broken builds, the Daemon **ignores all file changes** except one.
 
 1.  **Edit:** Modify as many files as needed.
-2.  **Signal:** Run `touch .build_request`.
-3.  **React:** Daemon sees signal -> Runs Build -> Runs Verify -> **Writes output to `.build.log`**.
-4.  **Feedback:** AI Agent reads `.build.log` to check for errors and iterates if necessary.
+2.  **Signal:** Run `touch .ddd.build.request`.
+3.  **React:** Daemon sees signal -> Runs Build -> Runs Verify -> **Writes output to `.ddd.build.log`**.
+4.  **Feedback:** AI Agent reads `.ddd.build.log` to check for errors and iterates if necessary.
 
 ### Setup
 

@@ -7,6 +7,10 @@ DAEMON_SCRIPT="$REPO_ROOT/src/dd-daemon.py"
 MOUNT_TOOL="$REPO_ROOT/tools/dd-print-mount"
 VENV_PYTHON="$REPO_ROOT/.venv/bin/python"
 
+# --- Constants ---
+TRIGGER_FILE=".ddd.build.request"  # <--- RENAMED
+LOG_FILE=".ddd.build.log"          # <--- RENAMED
+
 # Create a sandbox for testing
 TEST_DIR="$(mktemp -d)"
 echo "=== Starting dd-daemon Infrastructure Test ==="
@@ -27,11 +31,11 @@ echo "--- Test 2: Daemon Explicit Protocol ---"
 
 cd "$TEST_DIR"
 
-# Create a mock config that writes to a 'success' file
+# Create a mock config
 cat <<JSON > .dd-config
 {
-  "build_cmd": "echo 'BUILD_RUN' > build.log",
-  "verify_cmd": "echo 'VERIFY_RUN' > verify.log",
+  "build_cmd": "echo 'BUILD_RUN'",
+  "verify_cmd": "echo 'VERIFY_RUN'",
   "watch_dir": "."
 }
 JSON
@@ -46,19 +50,19 @@ sleep 2
 # Action: Touch a random file (Should be IGNORED)
 touch random_file.txt
 sleep 1
-if [ -f build.log ]; then
+if [ -f "$LOG_FILE" ]; then
     echo "[FAIL] Daemon triggered on random file (Should be strict!)"
     kill $DAEMON_PID
     exit 1
 fi
 
 # Action: Touch the Trigger (Should be DETECTED)
-touch .build_request
+touch "$TRIGGER_FILE"
 sleep 2
 
 # Check results
-if grep -q "BUILD_RUN" build.log && grep -q "VERIFY_RUN" verify.log; then
-    echo "[PASS] Daemon correctly triggered on .build_request"
+if grep -q "BUILD_RUN" "$LOG_FILE" && grep -q "VERIFY_RUN" "$LOG_FILE"; then
+    echo "[PASS] Daemon correctly triggered on $TRIGGER_FILE"
 else
     echo "[FAIL] Daemon did not trigger or commands failed."
     echo "--- Daemon Log ---"
