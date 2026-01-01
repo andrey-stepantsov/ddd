@@ -19,12 +19,13 @@ DDD_DIR = ".ddd"
 CONFIG_FILE = os.path.join(DDD_DIR, "config.json")
 TRIGGER_FILENAME = "build.request"
 LOG_FILE = os.path.join(DDD_DIR, "build.log")
-RAW_LOG_FILE = os.path.join(DDD_DIR, "last_build.raw.log") # <--- NEW
+RAW_LOG_FILE = os.path.join(DDD_DIR, "last_build.raw.log")
+LOCK_FILE = os.path.join(DDD_DIR, "run.lock")
 
 class RequestHandler(FileSystemEventHandler):
     def __init__(self):
         self.last_run = 0
-        self.cooldown = 2.0
+        self.cooldown = 1.0
         load_plugins()
         print(f"[*] Loaded filters: {list(REGISTRY.keys())}")
 
@@ -44,6 +45,19 @@ class RequestHandler(FileSystemEventHandler):
         self.last_run = time.time()
 
         print(f"\n[>>>] Signal received: {TRIGGER_FILENAME}")
+        
+        # 1. SET BUSY SIGNAL
+        with open(LOCK_FILE, 'w') as f:
+            f.write(str(time.time()))
+
+        try:
+            self._execute_logic()
+        finally:
+            # 2. CLEAR BUSY SIGNAL
+            if os.path.exists(LOCK_FILE):
+                os.remove(LOCK_FILE)
+
+    def _execute_logic(self):
         config = self.load_config()
         if not config: return
 
@@ -53,7 +67,6 @@ class RequestHandler(FileSystemEventHandler):
             print(f"[-] Target '{target_name}' not found.")
             return
 
-        # Open BOTH files in Write mode (Truncate)
         with open(LOG_FILE, "w") as f_clean, open(RAW_LOG_FILE, "w") as f_raw:
             header = f"=== Pipeline: {target_name} ({time.ctime()}) ===\n"
             f_clean.write(header)
@@ -70,8 +83,6 @@ class RequestHandler(FileSystemEventHandler):
                 self._run_stage("VERIFY", verify_cfg, f_clean, f_raw)
 
         print(f"[*] Pipeline Complete.")
-        print(f"    AI Log:  {LOG_FILE}")
-        print(f"    Raw Log: {RAW_LOG_FILE}")
 
     def _run_stage(self, name, stage_config, f_clean, f_raw):
         cmd = stage_config.get("cmd")
@@ -93,16 +104,13 @@ class RequestHandler(FileSystemEventHandler):
         )
         
         raw_output_buffer = []
-        
-        # Stream processing
         for line in process.stdout:
-            print(line, end='')      # 1. To Console
-            f_raw.write(line)        # 2. To Raw File
-            raw_output_buffer.append(line) # 3. To Buffer (for Filter)
+            print(line, end='')
+            f_raw.write(line)
+            raw_output_buffer.append(line)
         
         process.wait()
 
-        # Post-Process for AI
         clean_text = processor.process("".join(raw_output_buffer))
         f_clean.write(f"\n--- {name} OUTPUT ---\n")
         f_clean.write(clean_text)
@@ -124,6 +132,9 @@ if __name__ == "__main__":
     if not os.path.exists(DDD_DIR):
         os.makedirs(DDD_DIR)
         
+    if os.path.exists(LOCK_FILE):
+        os.remove(LOCK_FILE)
+
     print(f"[*] dd-daemon ACTIVE.")
     print(f"[*] Watching: {DDD_DIR}/")
     

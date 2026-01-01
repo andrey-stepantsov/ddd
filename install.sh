@@ -1,59 +1,52 @@
 #!/bin/bash
-set -e
+# install.sh - Complete setup for DDD (Venv + Shim + Link)
 
-# --- Configuration ---
+set -e  # Exit on error
+
 REPO_ROOT="$(pwd)"
-INSTALL_DIR="$HOME/.local/bin"
 VENV_DIR="$REPO_ROOT/.venv"
 VENV_PYTHON="$VENV_DIR/bin/python"
+BIN_DIR="$HOME/.local/bin"
 
-# Daemon Config
-DAEMON_NAME="dd-daemon"
-DAEMON_SOURCE="$REPO_ROOT/src/dd-daemon.py"
-DAEMON_TARGET="$INSTALL_DIR/$DAEMON_NAME"
+echo "=== Installing DDD ==="
 
-# Mount Tool Config
-MOUNT_NAME="dd-print-mount"
-MOUNT_SOURCE="$REPO_ROOT/tools/dd-print-mount"
-MOUNT_TARGET="$INSTALL_DIR/$MOUNT_NAME"
+# 1. Ensure Requirements File Exists
+if [ ! -f "requirements.txt" ]; then
+    echo "[*] Creating default requirements.txt..."
+    echo "watchdog" > requirements.txt
+fi
 
-echo "=== Installing ddd Toolkit ==="
-
-# 1. Setup Virtual Environment (Auto-Healing)
+# 2. Setup/Update Virtual Environment
 if [ ! -d "$VENV_DIR" ]; then
-    echo "[+] Creating isolated virtual environment..."
+    echo "[*] Creating virtual environment at $VENV_DIR..."
     python3 -m venv "$VENV_DIR"
-fi
-
-# 2. Install Dependencies
-echo "[+] Checking Python dependencies..."
-"$VENV_PYTHON" -m pip install watchdog > /dev/null
-
-mkdir -p "$INSTALL_DIR"
-
-# 3. Install Daemon (Wrapper Method)
-if [ -L "$DAEMON_TARGET" ] || [ -f "$DAEMON_TARGET" ]; then
-    rm "$DAEMON_TARGET"
-fi
-
-echo "[+] Installing $DAEMON_NAME..."
-cat <<WRAPPER > "$DAEMON_TARGET"
-#!/bin/bash
-exec "$VENV_PYTHON" "$DAEMON_SOURCE" "\$@"
-WRAPPER
-chmod +x "$DAEMON_TARGET"
-
-# 4. Install Mount Tool (Symlink Method)
-if [ -L "$MOUNT_TARGET" ] || [ -f "$MOUNT_TARGET" ]; then
-    rm "$MOUNT_TARGET"
-fi
-
-echo "[+] Installing $MOUNT_NAME..."
-ln -s "$MOUNT_SOURCE" "$MOUNT_TARGET"
-
-# 5. Final Path Check
-if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
-    echo "WARNING: $INSTALL_DIR is not in your PATH."
 else
-    echo "SUCCESS: Toolkit installed ($DAEMON_NAME, $MOUNT_NAME)."
+    echo "[*] Virtual environment found."
 fi
+
+# 3. Install Dependencies
+echo "[*] Installing dependencies..."
+"$VENV_PYTHON" -m pip install -q -r requirements.txt
+
+# 4. Create Bin Directory
+mkdir -p "$BIN_DIR"
+
+# 5. Install Daemon (The Shim)
+echo "[*] Installing dd-daemon to $BIN_DIR..."
+
+# CRITICAL FIX: Remove existing link/file to prevent overwriting source
+rm -f "$BIN_DIR/dd-daemon"
+
+cat <<SHIM > "$BIN_DIR/dd-daemon"
+#!/bin/bash
+exec "$VENV_PYTHON" "$REPO_ROOT/src/dd-daemon.py" "\$@"
+SHIM
+chmod +x "$BIN_DIR/dd-daemon"
+
+# 6. Install Client (Symlink)
+echo "[*] Installing ddd-wait to $BIN_DIR..."
+rm -f "$BIN_DIR/ddd-wait"
+ln -sf "$REPO_ROOT/bin/ddd-wait" "$BIN_DIR/ddd-wait"
+
+echo "=== Success! ==="
+echo "You can now run 'dd-daemon' and 'ddd-wait' from anywhere."

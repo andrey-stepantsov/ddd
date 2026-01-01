@@ -1,6 +1,6 @@
 #!/bin/bash
 # tests/run_tests.sh
-# End-to-End test of the DDD infrastructure (Dot-Folder Mode)
+# End-to-End verification of DDD: Lock Protocol & Shadow Logging
 
 REPO_ROOT="$(pwd)"
 DAEMON_SCRIPT="$REPO_ROOT/src/dd-daemon.py"
@@ -10,47 +10,37 @@ VENV_PYTHON="$REPO_ROOT/.venv/bin/python"
 DDD_DIR=".ddd"
 TRIGGER_FILE="$DDD_DIR/build.request"
 LOG_FILE="$DDD_DIR/build.log"
+RAW_LOG_FILE="$DDD_DIR/last_build.raw.log"
+LOCK_FILE="$DDD_DIR/run.lock"
 CONFIG_FILE="$DDD_DIR/config.json"
 
-# Create a sandbox for testing
 TEST_DIR="$(mktemp -d)"
-echo "=== Starting DDD Dot-Folder Test ==="
+echo "=== Starting DDD Enhanced Test ==="
 echo "Workdir: $TEST_DIR"
 
 cd "$TEST_DIR"
 
-# --- Test 1: Daemon Startup & Directory Creation ---
+# --- Test 1: Daemon Startup ---
 echo "--- Test 1: Daemon Startup ---"
-
-# Start Daemon in background
 "$VENV_PYTHON" "$DAEMON_SCRIPT" > daemon.log 2>&1 &
 DAEMON_PID=$!
-
-# Give it a moment to initialize
 sleep 2
 
-# Check if .ddd directory was auto-created
 if [ ! -d "$DDD_DIR" ]; then
     echo "[FAIL] Daemon failed to create $DDD_DIR directory."
-    kill $DAEMON_PID
-    exit 1
+    kill $DAEMON_PID; exit 1
 fi
-echo "[PASS] .ddd directory created."
 
-# --- Test 2: Configuration Loading ---
-echo "--- Test 2: Trigger Logic ---"
+# --- Test 2: Lock Protocol & Logging ---
+echo "--- Test 2: Lock Protocol & Shadow Logging ---"
 
-# Create a mock config inside the hidden folder
+# Create a config with a DELAY so we can catch the lock file
 cat <<JSON > "$CONFIG_FILE"
 {
   "targets": {
     "dev": {
       "build": { 
-        "cmd": "echo 'BUILD_RUN_SUCCESS'", 
-        "filter": "raw" 
-      },
-      "verify": { 
-        "cmd": "echo 'VERIFY_RUN_SUCCESS'", 
+        "cmd": "sleep 2 && echo 'BUILD_FINISHED'", 
         "filter": "raw" 
       }
     }
@@ -60,21 +50,45 @@ JSON
 
 # Action: Touch the Trigger
 touch "$TRIGGER_FILE"
-sleep 2
+echo "[*] Triggered. Waiting for Lock..."
 
-# Check results
-if grep -q "BUILD_RUN_SUCCESS" "$LOG_FILE" && grep -q "VERIFY_RUN_SUCCESS" "$LOG_FILE"; then
-    echo "[PASS] Daemon triggered and executed pipeline."
-else
-    echo "[FAIL] Pipeline failed or logs missing."
-    echo "--- Daemon Log ---"
-    cat daemon.log
-    if [ -f "$LOG_FILE" ]; then
-        echo "--- Build Log ---"
-        cat "$LOG_FILE"
+# CHECK A: Does Lock appear? (Give it 1s to react)
+LOCK_FOUND=0
+for i in {1..10}; do
+    if [ -f "$LOCK_FILE" ]; then
+        LOCK_FOUND=1
+        break
     fi
-    kill $DAEMON_PID
-    exit 1
+    sleep 0.1
+done
+
+if [ $LOCK_FOUND -eq 1 ]; then
+    echo "[PASS] Lock file created."
+else
+    echo "[FAIL] Lock file never appeared!"
+    kill $DAEMON_PID; exit 1
+fi
+
+# CHECK B: Does Lock vanish? (Wait for build to finish)
+echo "[*] Waiting for build to finish..."
+while [ -f "$LOCK_FILE" ]; do
+    sleep 0.5
+done
+echo "[PASS] Lock file removed."
+
+# CHECK C: Do logs exist?
+if grep -q "BUILD_FINISHED" "$LOG_FILE"; then
+    echo "[PASS] Clean log contains output."
+else
+    echo "[FAIL] Clean log missing output."
+    kill $DAEMON_PID; exit 1
+fi
+
+if grep -q "BUILD_FINISHED" "$RAW_LOG_FILE"; then
+    echo "[PASS] Raw shadow log contains output."
+else
+    echo "[FAIL] Raw log missing output."
+    kill $DAEMON_PID; exit 1
 fi
 
 # Cleanup

@@ -1,0 +1,30 @@
+#!/bin/bash
+# ddd-wait: Trigger a build and wait for the result.
+
+DDD_DIR=".ddd"
+TRIGGER="$DDD_DIR/build.request"
+LOCK="$DDD_DIR/run.lock"
+LOG="$DDD_DIR/build.log"
+
+if [ ! -d "$DDD_DIR" ]; then
+    echo "Error: .ddd directory not found in $(pwd)."
+    exit 1
+fi
+
+# 1. Trigger
+touch "$TRIGGER"
+echo "[ddd] Build triggered. Waiting..."
+
+# 2. Wait for Start (Lock Appears)
+for i in {1..20}; do
+    if [ -f "$LOCK" ]; then break; fi
+    sleep 0.1
+done
+
+# 3. Wait for Finish (Lock Vanishes)
+while [ -f "$LOCK" ]; do sleep 0.2; done
+
+# 4. Show Result
+echo "---------------------------------------------------"
+cat "$LOG"
+echo "---------------------------------------------------"
