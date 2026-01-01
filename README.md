@@ -15,12 +15,12 @@ The system runs as three distinct "Heads" in three terminals:
 
 2.  **The Watcher (`dd-daemon`)**
     * **Role:** The Nervous System.
-    * **Job:** Watches for the specific signal (`.build_request`), triggers the build inside the container, and runs verification.
+    * **Job:** Watches for the specific signal (`.build_request`), triggers the build inside the container, pipes output to logs, and runs verification.
     * **Mechanism:** Python script on Host using `watchdog`.
 
 3.  **The Coder (AI Agent / You)**
     * **Role:** The Brain.
-    * **Job:** Edits source code and signals when ready.
+    * **Job:** Edits source code, signals when ready, and reads logs to iterate.
     * **Mechanism:** Aider (inside a container) or Neovim (on host).
 
 ### The Protocol (Explicit Mode)
@@ -29,7 +29,8 @@ To prevent infinite loops and broken builds, the Daemon **ignores all file chang
 
 1.  **Edit:** Modify as many files as needed.
 2.  **Signal:** Run `touch .build_request`.
-3.  **React:** Daemon sees signal -> Runs Build -> Runs Verify.
+3.  **React:** Daemon sees signal -> Runs Build -> Runs Verify -> **Writes output to `.build.log`**.
+4.  **Feedback:** AI Agent reads `.build.log` to check for errors and iterates if necessary.
 
 ### Setup
 
@@ -43,4 +44,3 @@ To prevent infinite loops and broken builds, the Daemon **ignores all file chang
     }
     ```
 3.  **Run:** `dd-daemon`
-
