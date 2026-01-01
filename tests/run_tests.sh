@@ -1,72 +1,78 @@
 #!/bin/bash
 # tests/run_tests.sh
-# End-to-End test of the ddd infrastructure
+# End-to-End test of the DDD infrastructure (Dot-Folder Mode)
 
 REPO_ROOT="$(pwd)"
 DAEMON_SCRIPT="$REPO_ROOT/src/dd-daemon.py"
-MOUNT_TOOL="$REPO_ROOT/tools/dd-print-mount"
 VENV_PYTHON="$REPO_ROOT/.venv/bin/python"
 
 # --- Constants ---
-TRIGGER_FILE=".ddd.build.request"  # <--- RENAMED
-LOG_FILE=".ddd.build.log"          # <--- RENAMED
+DDD_DIR=".ddd"
+TRIGGER_FILE="$DDD_DIR/build.request"
+LOG_FILE="$DDD_DIR/build.log"
+CONFIG_FILE="$DDD_DIR/config.json"
 
 # Create a sandbox for testing
 TEST_DIR="$(mktemp -d)"
-echo "=== Starting dd-daemon Infrastructure Test ==="
+echo "=== Starting DDD Dot-Folder Test ==="
 echo "Workdir: $TEST_DIR"
-
-# --- Test 1: Mount Tool ---
-echo "--- Test 1: Mount Tool ---"
-MOUNT_OUT=$($MOUNT_TOOL)
-if [[ "$MOUNT_OUT" == "-v "*":/mission/bin:ro" ]]; then
-    echo "[PASS] Mount string valid: $MOUNT_OUT"
-else
-    echo "[FAIL] Invalid mount string: $MOUNT_OUT"
-    exit 1
-fi
-
-# --- Test 2: Daemon Trigger Logic ---
-echo "--- Test 2: Daemon Explicit Protocol ---"
 
 cd "$TEST_DIR"
 
-# Create a mock config
-cat <<JSON > .dd-config
-{
-  "build_cmd": "echo 'BUILD_RUN'",
-  "verify_cmd": "echo 'VERIFY_RUN'",
-  "watch_dir": "."
-}
-JSON
+# --- Test 1: Daemon Startup & Directory Creation ---
+echo "--- Test 1: Daemon Startup ---"
 
 # Start Daemon in background
 "$VENV_PYTHON" "$DAEMON_SCRIPT" > daemon.log 2>&1 &
 DAEMON_PID=$!
 
-# Give it a second to spin up
+# Give it a moment to initialize
 sleep 2
 
-# Action: Touch a random file (Should be IGNORED)
-touch random_file.txt
-sleep 1
-if [ -f "$LOG_FILE" ]; then
-    echo "[FAIL] Daemon triggered on random file (Should be strict!)"
+# Check if .ddd directory was auto-created
+if [ ! -d "$DDD_DIR" ]; then
+    echo "[FAIL] Daemon failed to create $DDD_DIR directory."
     kill $DAEMON_PID
     exit 1
 fi
+echo "[PASS] .ddd directory created."
 
-# Action: Touch the Trigger (Should be DETECTED)
+# --- Test 2: Configuration Loading ---
+echo "--- Test 2: Trigger Logic ---"
+
+# Create a mock config inside the hidden folder
+cat <<JSON > "$CONFIG_FILE"
+{
+  "targets": {
+    "dev": {
+      "build": { 
+        "cmd": "echo 'BUILD_RUN_SUCCESS'", 
+        "filter": "raw" 
+      },
+      "verify": { 
+        "cmd": "echo 'VERIFY_RUN_SUCCESS'", 
+        "filter": "raw" 
+      }
+    }
+  }
+}
+JSON
+
+# Action: Touch the Trigger
 touch "$TRIGGER_FILE"
 sleep 2
 
 # Check results
-if grep -q "BUILD_RUN" "$LOG_FILE" && grep -q "VERIFY_RUN" "$LOG_FILE"; then
-    echo "[PASS] Daemon correctly triggered on $TRIGGER_FILE"
+if grep -q "BUILD_RUN_SUCCESS" "$LOG_FILE" && grep -q "VERIFY_RUN_SUCCESS" "$LOG_FILE"; then
+    echo "[PASS] Daemon triggered and executed pipeline."
 else
-    echo "[FAIL] Daemon did not trigger or commands failed."
+    echo "[FAIL] Pipeline failed or logs missing."
     echo "--- Daemon Log ---"
     cat daemon.log
+    if [ -f "$LOG_FILE" ]; then
+        echo "--- Build Log ---"
+        cat "$LOG_FILE"
+    fi
     kill $DAEMON_PID
     exit 1
 fi

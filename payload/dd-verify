@@ -1,44 +1,17 @@
 #!/bin/bash
-
-# dd-verify
-# This script is injected into the container at /mission/bin/dd-verify.
-# It is executed by the daemon whenever a build succeeds.
-
-# ANSI Colors for readability
-GREEN='\033[0;32m'
-RED='\033[0;31m'
-NC='\033[0m' # No Color
-
 echo "--- [dd-verify] Starting Verification ---"
-
-# 1. Environment Check (Optional: verify we are where we think we are)
 echo "User: $(whoami)"
 echo "Workdir: $(pwd)"
 
-# 2. The Verification Logic
-# Customize this section for your specific project (NetHack, etc.)
-# ---------------------------------------------------------
+# TARGET: Updated to point to the correct build artifact
+TARGET="src/nethack"
 
-# Example: Check if the binary exists
-TARGET_BIN="./nethack"
-
-if [ -f "$TARGET_BIN" ]; then
-    echo -e "${GREEN}[PASS] Binary found: $TARGET_BIN${NC}"
-    
-    # Example: specific smoke test (does it run?)
-    # timeout 5s $TARGET_BIN --version
-    # if [ $? -eq 0 ]; then
-    #    echo -e "${GREEN}[PASS] Binary runs successfully.${NC}"
-    # else
-    #    echo -e "${RED}[FAIL] Binary crashed or timed out.${NC}"
-    #    exit 1
-    # fi
+if [ -f "$TARGET" ]; then
+    echo "[PASS] Binary found at $TARGET"
 else
-    echo -e "${RED}[FAIL] Binary not found at $TARGET_BIN${NC}"
-    # We exit with 0 here to avoid breaking the daemon loop, 
-    # but in a CI environment you'd want exit 1.
-    exit 0 
+    echo "[FAIL] Binary not found at $TARGET"
+    # List the src directory to help debug if it fails again
+    echo "--- Contents of src/ ---"
+    ls -l src/ | grep nethack
+    exit 1
 fi
-
-# ---------------------------------------------------------
-echo "--- [dd-verify] Finished ---"

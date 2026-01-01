@@ -6,43 +6,56 @@
 
 DDD is a physical-to-virtual bridge that allows modern AI agents and host tools to control a persistent, isolated build container.
 
-### The Architecture
+### 1. The Architecture
 
-The system runs as three distinct "Heads" in three terminals:
+The system runs as three distinct "Heads":
 
-1.  **The Builder (`*-dev` container)**
-    * **Role:** Passive persistence.
-    * **Job:** Holds the compiler state, object files, and dependencies. Never exits.
-    * **Mechanism:** Docker container running `sleep infinity`.
+* **The Builder (Container):** Holds the compiler state, object files, and dependencies. Never exits.
+* **The Watcher (Host Daemon):** Watches for signals, triggers builds, filters logs, and runs verification.
+* **The Coder (AI/You):** Edits source code and signals when ready.
 
-2.  **The Watcher (`dd-daemon`)**
-    * **Role:** The Nervous System.
-    * **Job:** Watches for the specific signal (`.ddd.build.request`), triggers the build inside the container, pipes output to logs, and runs verification.
-    * **Mechanism:** Python script on Host using `watchdog`.
+### 2. The Clean Structure
 
-3.  **The Coder (AI Agent / You)**
-    * **Role:** The Brain.
-    * **Job:** Edits source code, signals when ready, and reads logs to iterate.
-    * **Mechanism:** Aider (inside a container) or Neovim (on host).
+DDD uses a dedicated hidden directory to avoid polluting your source tree.
 
-### The Protocol (Explicit Mode)
+    YourProject/
+    ├── src/
+    └── .ddd/                <-- Isolated DDD Context
+        ├── config.json      <-- Target definitions
+        ├── build.request    <-- The Trigger (touch this)
+        ├── build.log        <-- The Output (read this)
+        └── scripts/         <-- (Optional) Your verify scripts
+
+### 3. The Protocol (How to use)
 
 To prevent infinite loops and broken builds, the Daemon **ignores all file changes** except one.
 
 1.  **Edit:** Modify as many files as needed.
-2.  **Signal:** Run `touch .ddd.build.request`.
-3.  **React:** Daemon sees signal -> Runs Build -> Runs Verify -> **Writes output to `.ddd.build.log`**.
-4.  **Feedback:** AI Agent reads `.ddd.build.log` to check for errors and iterates if necessary.
+2.  **Signal:** Run `touch .ddd/build.request`.
+3.  **React:** Daemon sees signal -> Runs Build -> Runs Verify -> **Writes output to `.ddd/build.log`**.
+4.  **Feedback:** Read `.ddd/build.log` to check for errors and iterate.
 
-### Setup
+### 4. Configuration
 
-1.  **Install:** `./install.sh` (Puts tools in `~/.local/bin`)
-2.  **Configure:** Create `.dd-config` in your project root:
-    ```json
+Create `.ddd/config.json` in your project root to define your targets.
+
     {
-      "build_cmd": "docker exec -t nethack-dev make -j4",
-      "verify_cmd": "docker exec -t nethack-dev /mission/bin/dd-verify",
-      "watch_dir": "."
+      "targets": {
+        "dev": {
+          "build": {
+            "cmd": "make -j4",
+            "filter": "gcc_make",
+            "path_strip": ""
+          },
+          "verify": {
+            "cmd": ".ddd/scripts/verify.sh",
+            "filter": "raw"
+          }
+        }
+      }
     }
-    ```
-3.  **Run:** `dd-daemon`
+
+### 5. Setup
+
+1.  **Install:** `./install.sh`
+2.  **Run:** `dd-daemon` inside your project root.
