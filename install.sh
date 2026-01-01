@@ -44,7 +44,6 @@ WRAPPER
 chmod +x "$DAEMON_TARGET"
 
 # 4. Install Mount Tool (Symlink Method)
-# Since this is a standalone bash script, a symlink is perfect.
 if [ -L "$MOUNT_TARGET" ] || [ -f "$MOUNT_TARGET" ]; then
     rm "$MOUNT_TARGET"
 fi
