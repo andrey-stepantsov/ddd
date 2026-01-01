@@ -1,5 +1,7 @@
 # DDD - "Dead Drop Daemon"
 
+**Repository:** [github.com/andrey-stepantsov/ddd](https://github.com/andrey-stepantsov/ddd)
+
 ## DDD: The Triple-Head Development Architecture
 
 DDD is a physical-to-virtual bridge that allows modern AI agents and host tools to control a persistent, isolated build container.
