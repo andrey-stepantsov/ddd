@@ -1,4 +1,11 @@
 #!/bin/bash
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Use Python to resolve the true location of this script (handles symlinks on Mac/Linux)
+REAL_SCRIPT_PATH=$(python3 -c "import os; print(os.path.realpath('$0'))")
+SCRIPT_DIR="$(dirname "$REAL_SCRIPT_PATH")"
+
+# Resolve payload directory relative to the REAL script location
 PAYLOAD_DIR="$(cd "$SCRIPT_DIR/../payload" && pwd)"
+
+# Output the Docker mount string
 echo "-v $PAYLOAD_DIR:/mission/bin:ro"

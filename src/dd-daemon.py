@@ -3,20 +3,20 @@ import json
 import os
 import subprocess
 import time
-import sys
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
 CONFIG_FILE = ".dd-config"
+TRIGGER_FILE = ".build_request"
 
-class BuildHandler(FileSystemEventHandler):
+class RequestHandler(FileSystemEventHandler):
     def __init__(self):
         self.last_run = 0
-        self.cooldown = 1.0  # Debounce: Wait 1s between triggers
+        self.cooldown = 2.0  # longer cooldown to prevent double-taps
 
     def load_config(self):
         if not os.path.exists(CONFIG_FILE):
-            print(f"[!] {CONFIG_FILE} not found in {os.getcwd()}")
+            print(f"[!] {CONFIG_FILE} not found")
             return None
         try:
             with open(CONFIG_FILE, 'r') as f:
@@ -26,23 +26,24 @@ class BuildHandler(FileSystemEventHandler):
             return None
 
     def run_pipeline(self):
+        # Debounce
         if time.time() - self.last_run < self.cooldown:
             return
         self.last_run = time.time()
 
+        print(f"\n[>>>] Signal received: {TRIGGER_FILE}")
+        
         config = self.load_config()
         if not config: return
 
         build_cmd = config.get('build_cmd')
-        if not build_cmd:
-            print("[!] No 'build_cmd' defined.")
-            return
+        if not build_cmd: return
 
-        print(f"\n[+] Build Triggered: {build_cmd}")
+        print(f"[+] Executing Build: {build_cmd}")
         build_res = subprocess.run(build_cmd, shell=True)
         
         if build_res.returncode != 0:
-            print("[-] Build Failed. Skipping verification.")
+            print("[-] Build Failed.")
             return
 
         verify_cmd = config.get('verify_cmd')
@@ -53,21 +54,25 @@ class BuildHandler(FileSystemEventHandler):
             print("[.] No 'verify_cmd' defined.")
 
     def on_modified(self, event):
-        if event.is_directory or CONFIG_FILE in event.src_path: return
-        if os.path.basename(event.src_path).startswith('.'): return
+        # STRICT PROTOCOL: Only react to the trigger file
+        if os.path.basename(event.src_path) == TRIGGER_FILE:
+            self.run_pipeline()
             
-        print(f"[*] Detected change in {event.src_path}")
-        self.run_pipeline()
+    def on_created(self, event):
+        # Handle case where file is created for the first time
+        if os.path.basename(event.src_path) == TRIGGER_FILE:
+            self.run_pipeline()
 
 if __name__ == "__main__":
     if not os.path.exists(CONFIG_FILE):
-        print(f"Usage: Run this from a project root containing a {CONFIG_FILE}")
-
-    print(f"[*] dd-daemon active. Watching: {os.getcwd()}")
+        print(f"WARNING: No {CONFIG_FILE} found.")
+        
+    print(f"[*] dd-daemon ACTIVE (Explicit Mode).")
+    print(f"[*] Waiting for signal: 'touch {TRIGGER_FILE}'")
     
-    event_handler = BuildHandler()
+    event_handler = RequestHandler()
     observer = Observer()
-    observer.schedule(event_handler, path='.', recursive=True)
+    observer.schedule(event_handler, path='.', recursive=False) # Non-recursive is safer/faster
     observer.start()
 
     try:
