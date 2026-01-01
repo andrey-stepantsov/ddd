@@ -23,8 +23,8 @@ DDD uses a dedicated hidden directory to avoid polluting your source tree.
     └── .ddd/                <-- Isolated DDD Context
         ├── config.json      <-- Target definitions
         ├── build.request    <-- The Trigger (touch this)
-        ├── build.log        <-- The Output (read this)
-        └── scripts/         <-- (Optional) Your verify scripts
+        ├── build.log        <-- AI Log (Filtered, clean)
+        └── last_build.raw.log <-- Human Log (Raw, full detail)
 
 ### 3. The Protocol (How to use)
 
@@ -32,7 +32,7 @@ To prevent infinite loops and broken builds, the Daemon **ignores all file chang
 
 1.  **Edit:** Modify as many files as needed.
 2.  **Signal:** Run `touch .ddd/build.request`.
-3.  **React:** Daemon sees signal -> Runs Build -> Runs Verify -> **Writes output to `.ddd/build.log`**.
+3.  **React:** Daemon sees signal -> Runs Build -> Runs Verify.
 4.  **Feedback:** Read `.ddd/build.log` to check for errors and iterate.
 
 ### 4. Configuration
@@ -55,7 +55,22 @@ Create `.ddd/config.json` in your project root to define your targets.
       }
     }
 
-### 5. Setup
+### 5. Monitoring & Debugging
+
+The system automatically manages two log files for every build:
+
+* **The AI Log (`.ddd/build.log`):**
+    * **Content:** Cleaned, filtered, relative paths only.
+    * **Purpose:** For the AI Agent. It removes noise so the LLM focuses on the error.
+    
+* **The Raw Log (`.ddd/last_build.raw.log`):**
+    * **Content:** Full `stdout` and `stderr` capture, including headers and progress bars.
+    * **Purpose:** For the Human. Check this if you suspect the filter is hiding important info.
+
+* **Real-time Stream:**
+    * The terminal running `dd-daemon` streams the raw output live.
+
+### 6. Setup
 
 1.  **Install:** `./install.sh`
 2.  **Run:** `dd-daemon` inside your project root.
