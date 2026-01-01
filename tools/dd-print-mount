@@ -1,0 +1,4 @@
+#!/bin/bash
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PAYLOAD_DIR="$(cd "$SCRIPT_DIR/../payload" && pwd)"
+echo "-v $PAYLOAD_DIR:/mission/bin:ro"

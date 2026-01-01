@@ -1,0 +1,126 @@
+{
+  "lockfile_version": "1",
+  "packages": {
+    "python311@latest": {
+      "last_modified": "2025-11-23T21:50:36Z",
+      "plugin_version": "0.0.4",
+      "resolved": "github:NixOS/nixpkgs/ee09932cedcef15aaf476f9343d1dea2cb77e261#python311",
+      "source": "devbox-search",
+      "version": "3.11.14",
+      "systems": {
+        "aarch64-darwin": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/ymffyssaavagb5jc1hbx1pkdq21gh16b-python3-3.11.14",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/ymffyssaavagb5jc1hbx1pkdq21gh16b-python3-3.11.14"
+        },
+        "aarch64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/kbyysxq0ry8vqbpkdwld118fi92wvqsf-python3-3.11.14",
+              "default": true
+            },
+            {
+              "name": "debug",
+              "path": "/nix/store/y8il90w9kvh1anv432rj8vz3nf7316w5-python3-3.11.14-debug"
+            }
+          ],
+          "store_path": "/nix/store/kbyysxq0ry8vqbpkdwld118fi92wvqsf-python3-3.11.14"
+        },
+        "x86_64-darwin": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/i4bd9nz257aph5lpjr19ggcaqc62qjn0-python3-3.11.14",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/i4bd9nz257aph5lpjr19ggcaqc62qjn0-python3-3.11.14"
+        },
+        "x86_64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/00x3abm7y8j13i6n4sahvbar99irkc7d-python3-3.11.14",
+              "default": true
+            },
+            {
+              "name": "debug",
+              "path": "/nix/store/2lj58b7mhib83mb0cx8flyahbs9pnd9z-python3-3.11.14-debug"
+            }
+          ],
+          "store_path": "/nix/store/00x3abm7y8j13i6n4sahvbar99irkc7d-python3-3.11.14"
+        }
+      }
+    },
+    "python311Packages.watchdog@latest": {
+      "last_modified": "2024-12-03T12:40:06Z",
+      "resolved": "github:NixOS/nixpkgs/566e53c2ad750c84f6d31f9ccb9d00f823165550#python311Packages.watchdog",
+      "source": "devbox-search",
+      "version": "4.0.2",
+      "systems": {
+        "aarch64-darwin": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/l6a653kcmr4j05bi46d52zk788b7c5hr-python3.11-watchdog-4.0.2",
+              "default": true
+            },
+            {
+              "name": "dist",
+              "path": "/nix/store/w4vnzyflwzww7c1w787348kp5f8saz35-python3.11-watchdog-4.0.2-dist"
+            }
+          ],
+          "store_path": "/nix/store/l6a653kcmr4j05bi46d52zk788b7c5hr-python3.11-watchdog-4.0.2"
+        },
+        "aarch64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/cjisvxqggnz0lvjkg1q8vv9b5ln9agnn-python3.11-watchdog-4.0.2",
+              "default": true
+            },
+            {
+              "name": "dist",
+              "path": "/nix/store/2w92bzz9bs4l0m6lvrxmakdiajpajw0i-python3.11-watchdog-4.0.2-dist"
+            }
+          ],
+          "store_path": "/nix/store/cjisvxqggnz0lvjkg1q8vv9b5ln9agnn-python3.11-watchdog-4.0.2"
+        },
+        "x86_64-darwin": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/r25by31sr5763kqjrsm7qjrbvdpw97mx-python3.11-watchdog-4.0.2",
+              "default": true
+            },
+            {
+              "name": "dist",
+              "path": "/nix/store/r3j5334lk943iikv9w9xc2kw1hc607p9-python3.11-watchdog-4.0.2-dist"
+            }
+          ],
+          "store_path": "/nix/store/r25by31sr5763kqjrsm7qjrbvdpw97mx-python3.11-watchdog-4.0.2"
+        },
+        "x86_64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/f9qcab5xd0xx5wdy089p27i2yximr1p7-python3.11-watchdog-4.0.2",
+              "default": true
+            },
+            {
+              "name": "dist",
+              "path": "/nix/store/9623kv2p6j7bvhh6gdhhpjc5isjs8a5d-python3.11-watchdog-4.0.2-dist"
+            }
+          ],
+          "store_path": "/nix/store/f9qcab5xd0xx5wdy089p27i2yximr1p7-python3.11-watchdog-4.0.2"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,24 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+
+# --- Mac OS ---
+.DS_Store
+
+# --- Devbox ---
+.devbox/
+# We keep devbox.json and devbox.lock so others get the same version
+
+# --- Testing & Logs ---
+test_workspace/
+*.log
+daemon.out
+daemon_stdout.log
+docker_result.log
+
+# --- Local Configs ---
+# Ignore local configs if you create them in the root for testing
+.dd-config
