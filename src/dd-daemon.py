@@ -4,6 +4,7 @@ import os
 import subprocess
 import time
 import sys
+import stat
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
@@ -11,7 +12,9 @@ from watchdog.events import FileSystemEventHandler
 sys.stdout.reconfigure(line_buffering=True)
 sys.stderr.reconfigure(line_buffering=True)
 
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+# Ensure we can import local modules
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(CURRENT_DIR)
 from filters import load_plugins, REGISTRY
 
 # --- Constants ---
@@ -21,6 +24,10 @@ TRIGGER_FILENAME = "build.request"
 LOG_FILE = os.path.join(DDD_DIR, "build.log")
 RAW_LOG_FILE = os.path.join(DDD_DIR, "last_build.raw.log")
 LOCK_FILE = os.path.join(DDD_DIR, "run.lock")
+INJECTED_CLIENT = os.path.join(DDD_DIR, "wait")
+
+# Path to the Master Copy in the repo (../bin/ddd-wait)
+MASTER_CLIENT_PATH = os.path.abspath(os.path.join(CURRENT_DIR, "..", "bin", "ddd-wait"))
 
 class RequestHandler(FileSystemEventHandler):
     def __init__(self):
@@ -28,6 +35,29 @@ class RequestHandler(FileSystemEventHandler):
         self.cooldown = 1.0
         load_plugins()
         print(f"[*] Loaded filters: {list(REGISTRY.keys())}")
+        self.inject_client()
+
+    def inject_client(self):
+        """Reads master client from bin/ and injects it into .ddd/wait"""
+        if not os.path.exists(MASTER_CLIENT_PATH):
+            print(f"[!] Warning: Master client not found at {MASTER_CLIENT_PATH}")
+            return
+
+        try:
+            # Read from Master
+            with open(MASTER_CLIENT_PATH, 'r') as f_src:
+                content = f_src.read()
+            
+            # Write to Injection Point
+            with open(INJECTED_CLIENT, "w") as f_dst:
+                f_dst.write(content)
+            
+            # Make executable
+            st = os.stat(INJECTED_CLIENT)
+            os.chmod(INJECTED_CLIENT, st.st_mode | stat.S_IEXEC)
+            print(f"[*] Injected client tool: {INJECTED_CLIENT}")
+        except Exception as e:
+            print(f"[!] Failed to inject client: {e}")
 
     def load_config(self):
         if not os.path.exists(CONFIG_FILE):
