@@ -1,0 +1,6 @@
+{
+  "comment": "Parasitic Mode: Build on Host, Code in Container",
+  "build_cmd": "make -j4",
+  "verify_cmd": "./tools/verify.sh",
+  "watch_dir": "."
+}
