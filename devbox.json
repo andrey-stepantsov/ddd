@@ -6,11 +6,21 @@
   ],
   "shell": {
     "init_hook": [
-      "echo 'Welcome to devbox!' > /dev/null"
+      "echo 'Welcome to devbox!' > /dev/null",
+      "# --- 1. Ensure Venv Exists (Compatible with install.sh) ---",
+      "if [ ! -d .venv ]; then",
+      "  echo '[devbox] Creating .venv...'",
+      "  python -m venv .venv",
+      "fi",
+      "# --- 2. Activate ---",
+      "source .venv/bin/activate",
+      "# --- 3. Sync Dependencies (Prod + Dev) ---",
+      "pip install -q -r requirements.txt",
+      "pip install -q -r requirements-dev.txt"
     ],
     "scripts": {
       "test": [
-        "echo \"Error: no test specified\" && exit 1"
+        "pytest"
       ]
     }
   }

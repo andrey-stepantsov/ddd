@@ -23,23 +23,25 @@ class GccMakeFilter(BaseFilter):
         output = []
 
         for line in lines:
-            # A. Detect Critical Signals
+            # A. Detect Critical Signals (Highest Priority)
+            # We must catch errors even if they look like noise (e.g. make errors)
             if any(k in line.lower() for k in ["error:", "warning:", "fatal:", "note:"]):
                 self.context_lines = 5  # Open the gate
                 output.append(line)
                 continue
 
-            # B. Handle Context
+            # B. Filter Noise (Moved Up)
+            # Check for noise BEFORE capturing context.
+            if "make[" in line or "Entering directory" in line or "Leaving directory" in line:
+                continue
+
+            # C. Handle Context
             if self.context_lines > 0:
                 output.append(line)
                 self.context_lines -= 1
                 continue
-
-            # C. Filter Noise
-            if "make[" in line or "Entering directory" in line or "Leaving directory" in line:
-                continue
             
-            # Default: Keep line if we aren't sure
+            # D. Default: Keep line if we aren't sure
             output.append(line)
 
         return "\n".join(output)

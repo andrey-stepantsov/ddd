@@ -4,7 +4,7 @@ Thank you for your interest in the Distributed Developer Daemon.
 
 ## 🛠 Development Environment
 
-We support two ways to set up your development environment: **Devbox** (recommended) or **Standard Python Venv**.
+We support two ways to set up your development environment: **Devbox** (Core Devs) or **Standard Python Venv** (Plugin Devs).
 
 ### Option A: Devbox (Automated)
 If you have [Devbox](https://www.jetpack.io/devbox/docs/installing_devbox/) installed:
@@ -13,39 +13,32 @@ If you have [Devbox](https://www.jetpack.io/devbox/docs/installing_devbox/) inst
 
     devbox shell
 
-   *This automatically installs Python 3.x and creates the virtual environment.*
-
-2. Install dependencies:
-
-    pip install -r requirements.txt
-    # pip install -r requirements-dev.txt  # (Coming soon in Phase 1)
+   *This automatically installs Python 3.x, creates the virtual environment, and syncs all dependencies.*
 
 ### Option B: Manual Setup
-1. Create a virtual environment:
+Use this if you installed via `install.sh` and now want to run tests.
 
-    python3 -m venv .venv
+1. Activate the virtual environment:
+
+    # If you ran install.sh, the venv is already here:
     source .venv/bin/activate
 
 2. Install dependencies:
 
     pip install -r requirements.txt
+    pip install -r requirements-dev.txt
 
 ---
 
 ## 🧪 Running Tests
 
-### End-to-End Verification
-We currently use a shell-based integration test suite.
+### End-to-End & Unit Verification
+We use `pytest` for the complete test suite (Daemon behavior + Filter logic).
 
-    ./tests/run_tests.sh
-
-This script will:
-1. Spin up the daemon in the background.
-2. Trigger a mock build.
-3. Verify the lock file protocol and log capture.
+    pytest
 
 ### Client Verification
-To test the `ddd-wait` client specifically:
+To test the `ddd-wait` client binary specifically:
 
     ./tests/test_wait_client.sh
 
