@@ -34,10 +34,10 @@ graph TD
     Daemon -- "5. Filters & Writes" --> Files
     Coder -- "6. Reads build.log" --> Files
 
-    %% Styling
-    style Files fill:#f9f,stroke:#333,stroke-width:2px
-    style Daemon fill:#ccf,stroke:#333,stroke-width:2px
-    style Builder fill:#cfc,stroke:#333,stroke-width:2px
+    %% Styling - Softer Pastel Palette
+    style Files fill:#ffecb3,stroke:#333,stroke-width:2px
+    style Daemon fill:#b3e5fc,stroke:#333,stroke-width:2px
+    style Builder fill:#dcedc8,stroke:#333,stroke-width:2px
 ```
 
 ### 2. The Clean Structure
