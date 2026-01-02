@@ -22,7 +22,7 @@ DDD uses a dedicated hidden directory to avoid polluting your source tree.
     ├── src/
     └── .ddd/                <-- Isolated DDD Context
         ├── config.json      <-- Target definitions
-        ├── filters/         <-- (NEW) Project-specific Plugins
+        ├── filters/         <-- Project-specific Plugins
         ├── build.request    <-- The Trigger (touch this)
         ├── build.log        <-- AI Log (Filtered, clean)
         └── last_build.raw.log <-- Human Log (Raw, full detail)
@@ -40,62 +40,73 @@ To prevent infinite loops and broken builds, the Daemon **ignores all file chang
 
 Create `.ddd/config.json` in your project root to define your targets.
 
-    {
-      "targets": {
-        "dev": {
-          "build": {
-            "cmd": "make -j4",
-            "filter": "gcc_make",
-            "path_strip": ""
-          },
-          "verify": {
-            "cmd": ".ddd/scripts/verify.sh",
-            "filter": "raw"
-          }
-        }
+```json
+{
+  "targets": {
+    "dev": {
+      "build": {
+        "cmd": "make -j4",
+        "filter": ["gcc_make", "gcc_json"],
+        "path_strip": ""
+      },
+      "verify": {
+        "cmd": ".ddd/scripts/verify.sh",
+        "filter": "raw"
       }
     }
+  }
+}
+```
 
-### 5. Monitoring & Debugging
+### 5. Advanced Features
 
-The system automatically manages two log files for every build:
+#### Filter Chaining
+You can pipe the output of one filter into another by providing a list of strings in `config.json`.
+* **Example:** `["gcc_make", "gcc_json"]`
+* **Flow:** `Raw Output` -> `gcc_make` (Cleans noise) -> `gcc_json` (Formats to JSON) -> `build.log`.
 
-* **The AI Log (`.ddd/build.log`):**
-    * **Content:** Cleaned, filtered, relative paths only.
-    * **Purpose:** For the AI Agent. It removes noise so the LLM focuses on the error.
-    
-* **The Raw Log (`.ddd/last_build.raw.log`):**
-    * **Content:** Full `stdout` and `stderr` capture, including headers and progress bars.
-    * **Purpose:** For the Human. Check this if you suspect the filter is hiding important info.
+#### Structured Logging (JSON)
+The `gcc_json` filter parses standard GCC/Clang error messages into machine-readable JSON. This allows AI agents to ingest errors programmatically rather than guessing from text blobs.
 
-* **Real-time Stream:**
-    * The terminal running `dd-daemon` streams the raw output live.
+**Output Format:**
+```json
+[
+  {
+    "file": "main.c",
+    "line": 10,
+    "col": 5,
+    "type": "error",
+    "message": "expected ';'"
+  }
+]
+```
 
 ### 6. Setup
 
 1.  **Install:** `./install.sh`
 2.  **Run:** `dd-daemon` inside your project root.
 
-### 7. Custom Plugins (New in v0.2.0)
+### 7. Custom Plugins
 
-DDD supports a "Cascade" loading system for build parsers (filters). You can add custom Python scripts to parse output from tools like Rust Cargo, Maven, or arbitrary scripts.
-
-**The Cascade Order:**
-1.  **Project Local:** `.ddd/filters/*.py` (Highest Priority - Overrides defaults)
-2.  **User Global:** `~/.config/ddd/filters/*.py` (Personal tools)
-3.  **Built-in:** `src/filters/*.py` (Defaults like `gcc_make`)
+DDD supports a "Cascade" loading system for build parsers.
+* **Project Local:** `.ddd/filters/*.py`
+* **User Global:** `~/.config/ddd/filters/*.py`
+* **Built-in:** `src/filters/*.py`
 
 **How to write a plugin:**
-Create a file (e.g., `.ddd/filters/my_tool.py`):
+Create `.ddd/filters/my_tool.py`:
 
-    from src.filters import register_filter
-    from src.filters.base import BaseFilter
+```python
+from src.filters import register_filter
+from src.filters.base import BaseFilter
+
+@register_filter("my_tool")
+class MyToolFilter(BaseFilter):
+    def process(self, text: str) -> str:
+        return "Parsed: " + text
+```
+
+**Testing Plugins:**
+Run the test runner to verify your custom filters:
     
-    @register_filter("my_tool")
-    class MyToolFilter(BaseFilter):
-        def process(self, text: str) -> str:
-            # 1. Strip noise
-            # 2. Extract errors
-            return "Parsed: " + text
-
-Then use `"filter": "my_tool"` in your `config.json`.
+    ddd-test

@@ -10,13 +10,12 @@ BIN_DIR="$HOME/.local/bin"
 
 echo "=== Installing DDD ==="
 
-# 1. Ensure Requirements File Exists
+# 1. Ensure Requirements
 if [ ! -f "requirements.txt" ]; then
-    echo "[*] Creating default requirements.txt..."
     echo "watchdog" > requirements.txt
 fi
 
-# 2. Setup/Update Virtual Environment
+# 2. Setup Venv
 if [ ! -d "$VENV_DIR" ]; then
     echo "[*] Creating virtual environment at $VENV_DIR..."
     python3 -m venv "$VENV_DIR"
@@ -27,16 +26,17 @@ fi
 # 3. Install Dependencies
 echo "[*] Installing dependencies..."
 "$VENV_PYTHON" -m pip install -q -r requirements.txt
+# Ensure dev dependencies (pytest) are installed for ddd-test
+if [ -f "requirements-dev.txt" ]; then
+    "$VENV_PYTHON" -m pip install -q -r requirements-dev.txt
+fi
 
 # 4. Create Bin Directory
 mkdir -p "$BIN_DIR"
 
-# 5. Install Daemon (The Shim)
+# 5. Install Daemon (Shim)
 echo "[*] Installing dd-daemon to $BIN_DIR..."
-
-# CRITICAL FIX: Remove existing link/file to prevent overwriting source
 rm -f "$BIN_DIR/dd-daemon"
-
 cat <<SHIM > "$BIN_DIR/dd-daemon"
 #!/bin/bash
 exec "$VENV_PYTHON" "$REPO_ROOT/src/dd-daemon.py" "\$@"
@@ -48,10 +48,14 @@ echo "[*] Installing ddd-wait to $BIN_DIR..."
 rm -f "$BIN_DIR/ddd-wait"
 ln -sf "$REPO_ROOT/bin/ddd-wait" "$BIN_DIR/ddd-wait"
 
-# 7. Install Test Runner (Symlink) - NEW
+# 7. Install Test Runner (Shim) - UPDATED
 echo "[*] Installing ddd-test to $BIN_DIR..."
 rm -f "$BIN_DIR/ddd-test"
-ln -sf "$REPO_ROOT/bin/ddd-test" "$BIN_DIR/ddd-test"
+cat <<SHIM > "$BIN_DIR/ddd-test"
+#!/bin/bash
+exec "$VENV_PYTHON" "$REPO_ROOT/bin/ddd-test" "\$@"
+SHIM
+chmod +x "$BIN_DIR/ddd-test"
 
 echo "=== Success! ==="
 echo "You can now run 'dd-daemon', 'ddd-wait', and 'ddd-test' from anywhere."

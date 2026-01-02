@@ -12,10 +12,17 @@ from watchdog.events import FileSystemEventHandler
 sys.stdout.reconfigure(line_buffering=True)
 sys.stderr.reconfigure(line_buffering=True)
 
-# Ensure we can import local modules
-CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
-sys.path.append(CURRENT_DIR)
-from filters import load_plugins, REGISTRY
+# --- CRITICAL FIX: Standardize Namespace to 'src.filters' ---
+# 1. Resolve paths
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__)) # .../src
+REPO_ROOT = os.path.dirname(CURRENT_DIR)                 # .../ (Root)
+
+# 2. Add Repo Root to sys.path so we can import 'src.filters'
+if REPO_ROOT not in sys.path:
+    sys.path.insert(0, REPO_ROOT)
+
+# 3. Import using the full namespace (matches plugins)
+from src.filters import load_plugins, REGISTRY
 
 # --- Constants ---
 DDD_DIR = ".ddd"
@@ -33,11 +40,7 @@ class RequestHandler(FileSystemEventHandler):
     def __init__(self):
         self.last_run = 0
         self.cooldown = 1.0
-        
-        # CHANGED: Pass the current working directory (project root) to the loader
-        load_plugins(project_root=os.getcwd())
-        
-        print(f"[*] Loaded filters: {list(REGISTRY.keys())}")
+        # NOTE: Removed load_plugins() from here to enable hot-reloading
         self.inject_client()
 
     def inject_client(self):
@@ -47,15 +50,12 @@ class RequestHandler(FileSystemEventHandler):
             return
 
         try:
-            # Read from Master
             with open(MASTER_CLIENT_PATH, 'r') as f_src:
                 content = f_src.read()
             
-            # Write to Injection Point
             with open(INJECTED_CLIENT, "w") as f_dst:
                 f_dst.write(content)
             
-            # Make executable
             st = os.stat(INJECTED_CLIENT)
             os.chmod(INJECTED_CLIENT, st.st_mode | stat.S_IEXEC)
             print(f"[*] Injected client tool: {INJECTED_CLIENT}")
@@ -91,6 +91,10 @@ class RequestHandler(FileSystemEventHandler):
                 os.remove(LOCK_FILE)
 
     def _execute_logic(self):
+        # [HOT RELOAD] Scan for new/updated plugins before every build
+        # This fixes the race condition where tests create plugins after daemon start
+        load_plugins(project_root=os.getcwd())
+        
         config = self.load_config()
         if not config: return
 
@@ -124,9 +128,12 @@ class RequestHandler(FileSystemEventHandler):
         print(f"[+] Running {name}: {cmd}")
         f_raw.write(f"\n--- {name} RAW OUTPUT ---\n")
         
-        filter_name = stage_config.get("filter", "raw")
-        FilterClass = REGISTRY.get(filter_name, REGISTRY["raw"])
-        processor = FilterClass(stage_config)
+        # --- CHAINING LOGIC ---
+        filter_entry = stage_config.get("filter", "raw")
+        if isinstance(filter_entry, str):
+            filter_names = [filter_entry]
+        else:
+            filter_names = filter_entry
 
         process = subprocess.Popen(
             cmd, 
@@ -144,9 +151,20 @@ class RequestHandler(FileSystemEventHandler):
         
         process.wait()
 
-        clean_text = processor.process("".join(raw_output_buffer))
+        # Apply Filters Sequentially
+        current_text = "".join(raw_output_buffer)
+        
+        for fname in filter_names:
+            FilterClass = REGISTRY.get(fname)
+            if not FilterClass:
+                print(f"[!] Warning: Filter '{fname}' not found. Skipping.")
+                continue
+                
+            processor = FilterClass(stage_config)
+            current_text = processor.process(current_text)
+
         f_clean.write(f"\n--- {name} OUTPUT ---\n")
-        f_clean.write(clean_text)
+        f_clean.write(current_text)
 
         if process.returncode != 0:
             print(f"[-] {name} Failed.")
