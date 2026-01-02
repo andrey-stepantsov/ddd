@@ -14,7 +14,7 @@ The system runs as three distinct "Heads" that communicate solely through the fi
 * **The Watcher (Host Daemon):** Watches for signals, triggers builds, filters logs, and runs verification.
 * **The Coder (AI/You):** Edits source code and signals when ready.
 
-@@@mermaid
+```mermaid
 graph TD
     subgraph Host["Host Machine"]
         Coder[("👤 Coder / AI")]
@@ -38,7 +38,7 @@ graph TD
     style Files fill:#f9f,stroke:#333,stroke-width:2px
     style Daemon fill:#ccf,stroke:#333,stroke-width:2px
     style Builder fill:#cfc,stroke:#333,stroke-width:2px
-@@@
+```
 
 ### 2. The Clean Structure
 
@@ -66,7 +66,7 @@ To prevent infinite loops and broken builds, the Daemon **ignores all file chang
 
 Create `.ddd/config.json` in your project root to define your targets.
 
-@@@json
+```json
 {
   "targets": {
     "dev": {
@@ -82,13 +82,13 @@ Create `.ddd/config.json` in your project root to define your targets.
     }
   }
 }
-@@@
+```
 
 ### 5. The Pipeline Workflow
 
 DDD processes the "Build" and "Verify" stages independently, filters their output, and concatenates the results into a single log file for the AI.
 
-@@@mermaid
+```mermaid
 graph LR
     Trigger(Trigger) -->|Start| Pipeline
 
@@ -112,7 +112,7 @@ graph LR
     Res1 --> Final[Concatenate]
     Res2 --> Final
     Final --> Log["📄 build.log"]
-@@@
+```
 
 ### 6. Advanced Features
 
@@ -125,7 +125,7 @@ You can pipe the output of one filter into another by providing a list of string
 The `gcc_json` filter parses standard GCC/Clang error messages into machine-readable JSON. This allows AI agents to ingest errors programmatically rather than guessing from text blobs.
 
 **Output Format:**
-@@@json
+```json
 [
   {
     "file": "main.c",
@@ -135,7 +135,7 @@ The `gcc_json` filter parses standard GCC/Clang error messages into machine-read
     "message": "expected ';'"
   }
 ]
-@@@
+```
 
 ### 7. Setup
 
@@ -152,7 +152,7 @@ DDD supports a "Cascade" loading system for build parsers.
 **How to write a plugin:**
 Create `.ddd/filters/my_tool.py`:
 
-@@@python
+```python
 from src.filters import register_filter
 from src.filters.base import BaseFilter
 
@@ -160,7 +160,7 @@ from src.filters.base import BaseFilter
 class MyToolFilter(BaseFilter):
     def process(self, text: str) -> str:
         return "Parsed: " + text
-@@@
+```
 
 **Testing Plugins:**
 Run the test runner to verify your custom filters:
