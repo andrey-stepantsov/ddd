@@ -8,23 +8,19 @@ DDD is a physical-to-virtual bridge that allows modern AI agents and host tools 
 
 ### 1. The Architecture
 
-The system runs as three distinct "Heads" that communicate solely through the file system.
+The system runs as three distinct "Heads" that communicate solely through the file system. This allows any component to run in any environment (Host, Container, or Cloud) as long as they share the `.ddd` directory.
 
-* **The Builder (Container):** Holds the compiler state, object files, and dependencies. Never exits.
-* **The Watcher (Host Daemon):** Watches for signals, triggers builds, filters logs, and runs verification.
+* **The Builder:** Holds the compiler state, object files, and dependencies.
+* **The Watcher (Daemon):** Watches for signals, triggers builds, filters logs, and runs verification.
 * **The Coder (AI/You):** Edits source code and signals when ready.
 
 ```mermaid
 graph TD
-    subgraph Host["Host Machine"]
-        Coder[("👤 Coder / AI")]
-        Daemon[("👀 Watcher (Daemon)")]
-        Files["📂 .ddd/ Directory"]
-    end
-
-    subgraph Docker["Container"]
-        Builder[("🛠 Builder")]
-    end
+    %% Nodes
+    Coder[("👤 Coder / AI")]
+    Daemon[("👀 Watcher (Daemon)")]
+    Builder[("🛠 Builder")]
+    Files["📂 .ddd/ Interface"]
 
     %% Interactions
     Coder -- "1. Touches build.request" --> Files
@@ -34,10 +30,16 @@ graph TD
     Daemon -- "5. Filters & Writes" --> Files
     Coder -- "6. Reads build.log" --> Files
 
-    %% Styling - Softer Pastel Palette
-    style Files fill:#ffecb3,stroke:#333,stroke-width:2px
-    style Daemon fill:#b3e5fc,stroke:#333,stroke-width:2px
-    style Builder fill:#dcedc8,stroke:#333,stroke-width:2px
+    %% Styling - High Contrast & Environment Agnostic
+    %% Files: Center Hub (Orange)
+    style Files fill:#ffe0b2,stroke:#ef6c00,stroke-width:2px,color:black
+    
+    %% Daemon: White with Blue Border (High Contrast)
+    style Daemon fill:#ffffff,stroke:#0277bd,stroke-width:3px,color:black
+    
+    %% Ends: Soft Green and Grey
+    style Builder fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:black
+    style Coder fill:#f5f5f5,stroke:#616161,stroke-width:2px,color:black
 ```
 
 ### 2. The Clean Structure
