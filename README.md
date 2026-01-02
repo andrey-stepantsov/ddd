@@ -22,6 +22,7 @@ DDD uses a dedicated hidden directory to avoid polluting your source tree.
     ├── src/
     └── .ddd/                <-- Isolated DDD Context
         ├── config.json      <-- Target definitions
+        ├── filters/         <-- (NEW) Project-specific Plugins
         ├── build.request    <-- The Trigger (touch this)
         ├── build.log        <-- AI Log (Filtered, clean)
         └── last_build.raw.log <-- Human Log (Raw, full detail)
@@ -74,3 +75,27 @@ The system automatically manages two log files for every build:
 
 1.  **Install:** `./install.sh`
 2.  **Run:** `dd-daemon` inside your project root.
+
+### 7. Custom Plugins (New in v0.2.0)
+
+DDD supports a "Cascade" loading system for build parsers (filters). You can add custom Python scripts to parse output from tools like Rust Cargo, Maven, or arbitrary scripts.
+
+**The Cascade Order:**
+1.  **Project Local:** `.ddd/filters/*.py` (Highest Priority - Overrides defaults)
+2.  **User Global:** `~/.config/ddd/filters/*.py` (Personal tools)
+3.  **Built-in:** `src/filters/*.py` (Defaults like `gcc_make`)
+
+**How to write a plugin:**
+Create a file (e.g., `.ddd/filters/my_tool.py`):
+
+    from src.filters import register_filter
+    from src.filters.base import BaseFilter
+    
+    @register_filter("my_tool")
+    class MyToolFilter(BaseFilter):
+        def process(self, text: str) -> str:
+            # 1. Strip noise
+            # 2. Extract errors
+            return "Parsed: " + text
+
+Then use `"filter": "my_tool"` in your `config.json`.

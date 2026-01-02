@@ -33,7 +33,10 @@ class RequestHandler(FileSystemEventHandler):
     def __init__(self):
         self.last_run = 0
         self.cooldown = 1.0
-        load_plugins()
+        
+        # CHANGED: Pass the current working directory (project root) to the loader
+        load_plugins(project_root=os.getcwd())
+        
         print(f"[*] Loaded filters: {list(REGISTRY.keys())}")
         self.inject_client()
 
