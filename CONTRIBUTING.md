@@ -37,6 +37,24 @@ We use `pytest` for the complete test suite (Daemon behavior + Filter logic).
 
     pytest
 
+### Testing Plugins (New in v0.3.0)
+If you write custom filters (in `.ddd/filters` or `~/.config/ddd/filters`), you can verify them using the `ddd-test` runner.
+
+**The "Test Where You Live" Rule:**
+If you create `my_filter.py`, create a sibling `test_my_filter.py` next to it.
+
+**Running the Tests:**
+Run the test runner from your project root:
+
+    ddd-test
+
+This command automatically:
+1.  Discovers core tests (`tests/`).
+2.  Discovers your global plugins (`~/.config/ddd/filters`).
+3.  Discovers your project plugins (`.ddd/filters`).
+4.  Sets up `PYTHONPATH` so imports work correctly.
+5.  Runs `pytest` on everything.
+
 ### Client Verification
 To test the `ddd-wait` client binary specifically:
 

@@ -48,5 +48,10 @@ echo "[*] Installing ddd-wait to $BIN_DIR..."
 rm -f "$BIN_DIR/ddd-wait"
 ln -sf "$REPO_ROOT/bin/ddd-wait" "$BIN_DIR/ddd-wait"
 
+# 7. Install Test Runner (Symlink) - NEW
+echo "[*] Installing ddd-test to $BIN_DIR..."
+rm -f "$BIN_DIR/ddd-test"
+ln -sf "$REPO_ROOT/bin/ddd-test" "$BIN_DIR/ddd-test"
+
 echo "=== Success! ==="
-echo "You can now run 'dd-daemon' and 'ddd-wait' from anywhere."
+echo "You can now run 'dd-daemon', 'ddd-wait', and 'ddd-test' from anywhere."

@@ -1,0 +1,54 @@
+#!/usr/bin/env python3
+import os
+import sys
+import subprocess
+from pathlib import Path
+
+def main():
+    print("=== DDD Plugin Test Runner ===")
+    
+    # 1. Define Paths
+    # Resolve relative to this script: bin/ddd-test -> <root>
+    repo_root = Path(__file__).resolve().parent.parent
+    core_tests = repo_root / "tests"
+    
+    user_plugins = Path.home() / ".config" / "ddd" / "filters"
+    project_plugins = Path.cwd() / ".ddd" / "filters"
+    
+    # 2. Collect Test Targets & Python Paths
+    # Always test Core
+    test_targets = [str(core_tests)]
+    # Always include repo root in PYTHONPATH so plugins can import 'src'
+    python_paths = [str(repo_root)]
+    
+    # Check User Global Plugins (The "Global" Context)
+    if user_plugins.exists():
+        print(f"[*] Found User Plugins: {user_plugins}")
+        test_targets.append(str(user_plugins))
+        python_paths.append(str(user_plugins))
+        
+    # Check Project Local Plugins
+    if project_plugins.exists():
+        print(f"[*] Found Project Plugins: {project_plugins}")
+        test_targets.append(str(project_plugins))
+        python_paths.append(str(project_plugins))
+
+    # 3. Construct Environment
+    env = os.environ.copy()
+    existing_pythonpath = env.get("PYTHONPATH", "")
+    env["PYTHONPATH"] = os.pathsep.join(python_paths + [existing_pythonpath])
+    
+    # 4. Run Pytest
+    # We pass the targets (folders) to pytest, plus any user args
+    cmd = ["pytest"] + test_targets + sys.argv[1:]
+    
+    print(f"[*] Running: {' '.join(cmd)}")
+    print("-" * 40)
+    
+    try:
+        subprocess.run(cmd, env=env, check=True)
+    except subprocess.CalledProcessError as e:
+        sys.exit(e.returncode)
+
+if __name__ == "__main__":
+    main()
