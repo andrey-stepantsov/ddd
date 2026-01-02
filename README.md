@@ -8,11 +8,37 @@ DDD is a physical-to-virtual bridge that allows modern AI agents and host tools 
 
 ### 1. The Architecture
 
-The system runs as three distinct "Heads":
+The system runs as three distinct "Heads" that communicate solely through the file system.
 
 * **The Builder (Container):** Holds the compiler state, object files, and dependencies. Never exits.
 * **The Watcher (Host Daemon):** Watches for signals, triggers builds, filters logs, and runs verification.
 * **The Coder (AI/You):** Edits source code and signals when ready.
+
+@@@mermaid
+graph TD
+    subgraph Host["Host Machine"]
+        Coder[("👤 Coder / AI")]
+        Daemon[("👀 Watcher (Daemon)")]
+        Files["📂 .ddd/ Directory"]
+    end
+
+    subgraph Docker["Container"]
+        Builder[("🛠 Builder")]
+    end
+
+    %% Interactions
+    Coder -- "1. Touches build.request" --> Files
+    Daemon -- "2. Detects Signal" --> Files
+    Daemon -- "3. Executes Command" --> Builder
+    Builder -- "4. Raw Output" --> Daemon
+    Daemon -- "5. Filters & Writes" --> Files
+    Coder -- "6. Reads build.log" --> Files
+
+    %% Styling
+    style Files fill:#f9f,stroke:#333,stroke-width:2px
+    style Daemon fill:#ccf,stroke:#333,stroke-width:2px
+    style Builder fill:#cfc,stroke:#333,stroke-width:2px
+@@@
 
 ### 2. The Clean Structure
 
@@ -40,7 +66,7 @@ To prevent infinite loops and broken builds, the Daemon **ignores all file chang
 
 Create `.ddd/config.json` in your project root to define your targets.
 
-```json
+@@@json
 {
   "targets": {
     "dev": {
@@ -56,9 +82,39 @@ Create `.ddd/config.json` in your project root to define your targets.
     }
   }
 }
-```
+@@@
 
-### 5. Advanced Features
+### 5. The Pipeline Workflow
+
+DDD processes the "Build" and "Verify" stages independently, filters their output, and concatenates the results into a single log file for the AI.
+
+@@@mermaid
+graph LR
+    Trigger(Trigger) -->|Start| Pipeline
+
+    subgraph Pipeline["Daemon Pipeline"]
+        direction TB
+        
+        subgraph Stage1["Stage 1: Build"]
+            Cmd1[Make] --> Buf1[Buffer]
+            Buf1 --> F1[Filter: gcc_make]
+            F1 --> F2[Filter: gcc_json]
+            F2 --> Res1[Clean Errors]
+        end
+
+        subgraph Stage2["Stage 2: Verify"]
+            Cmd2[Test Script] --> Buf2[Buffer]
+            Buf2 --> F3[Filter: Raw]
+            F3 --> Res2[Test Results]
+        end
+    end
+
+    Res1 --> Final[Concatenate]
+    Res2 --> Final
+    Final --> Log["📄 build.log"]
+@@@
+
+### 6. Advanced Features
 
 #### Filter Chaining
 You can pipe the output of one filter into another by providing a list of strings in `config.json`.
@@ -69,7 +125,7 @@ You can pipe the output of one filter into another by providing a list of string
 The `gcc_json` filter parses standard GCC/Clang error messages into machine-readable JSON. This allows AI agents to ingest errors programmatically rather than guessing from text blobs.
 
 **Output Format:**
-```json
+@@@json
 [
   {
     "file": "main.c",
@@ -79,14 +135,14 @@ The `gcc_json` filter parses standard GCC/Clang error messages into machine-read
     "message": "expected ';'"
   }
 ]
-```
+@@@
 
-### 6. Setup
+### 7. Setup
 
 1.  **Install:** `./install.sh`
 2.  **Run:** `dd-daemon` inside your project root.
 
-### 7. Custom Plugins
+### 8. Custom Plugins
 
 DDD supports a "Cascade" loading system for build parsers.
 * **Project Local:** `.ddd/filters/*.py`
@@ -96,7 +152,7 @@ DDD supports a "Cascade" loading system for build parsers.
 **How to write a plugin:**
 Create `.ddd/filters/my_tool.py`:
 
-```python
+@@@python
 from src.filters import register_filter
 from src.filters.base import BaseFilter
 
@@ -104,7 +160,7 @@ from src.filters.base import BaseFilter
 class MyToolFilter(BaseFilter):
     def process(self, text: str) -> str:
         return "Parsed: " + text
-```
+@@@
 
 **Testing Plugins:**
 Run the test runner to verify your custom filters:
