@@ -5,6 +5,7 @@ import subprocess
 import time
 import sys
 import stat
+import glob
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
@@ -40,11 +41,10 @@ class RequestHandler(FileSystemEventHandler):
     def __init__(self):
         self.last_run = 0
         self.cooldown = 1.0
-        # NOTE: Removed load_plugins() from here to enable hot-reloading
         self.inject_client()
 
     def inject_client(self):
-        """Reads master client from bin/ and injects it into .ddd/wait"""
+        """Reads master client from bin/ and injects it into .ddd/wait with path fixes."""
         if not os.path.exists(MASTER_CLIENT_PATH):
             print(f"[!] Warning: Master client not found at {MASTER_CLIENT_PATH}")
             return
@@ -53,8 +53,21 @@ class RequestHandler(FileSystemEventHandler):
             with open(MASTER_CLIENT_PATH, 'r') as f_src:
                 content = f_src.read()
             
+            # --- CRITICAL FIX: Path Resolution for Injected Script ---
+            # The injected script lives INSIDE .ddd/, so we must ensure it calculates 
+            # DDD_DIR relative to itself (absolute path), rather than assuming PWD.
+            # We replace the default definition with the robust directory resolution.
+            
+            # Old: DDD_DIR=".ddd"
+            # New: DDD_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+            
+            patched_content = content.replace(
+                'DDD_DIR=".ddd"', 
+                'DDD_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"'
+            )
+
             with open(INJECTED_CLIENT, "w") as f_dst:
-                f_dst.write(content)
+                f_dst.write(patched_content)
             
             st = os.stat(INJECTED_CLIENT)
             os.chmod(INJECTED_CLIENT, st.st_mode | stat.S_IEXEC)
@@ -92,7 +105,6 @@ class RequestHandler(FileSystemEventHandler):
 
     def _execute_logic(self):
         # [HOT RELOAD] Scan for new/updated plugins before every build
-        # This fixes the race condition where tests create plugins after daemon start
         load_plugins(project_root=os.getcwd())
         
         config = self.load_config()
@@ -182,9 +194,17 @@ class RequestHandler(FileSystemEventHandler):
 if __name__ == "__main__":
     if not os.path.exists(DDD_DIR):
         os.makedirs(DDD_DIR)
-        
-    if os.path.exists(LOCK_FILE):
-        os.remove(LOCK_FILE)
+    
+    # --- CRITICAL FIX: Stale Lock Cleanup ---
+    # Unconditionally remove ALL .lock files in .ddd on startup
+    # This recovers from SIGKILL/Crashes where run.lock remains
+    lock_pattern = os.path.join(DDD_DIR, "*.lock")
+    for lock_file in glob.glob(lock_pattern):
+        try:
+            os.remove(lock_file)
+            print(f"[*] Cleanup: Removed stale lock {lock_file}")
+        except OSError as e:
+            print(f"[!] Cleanup Error: {e}")
 
     print(f"[*] dd-daemon ACTIVE.")
     print(f"[*] Watching: {DDD_DIR}/")

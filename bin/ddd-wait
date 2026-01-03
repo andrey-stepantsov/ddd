@@ -1,5 +1,6 @@
 #!/bin/bash
 # ddd-wait: Trigger a build and wait for the result.
+# Usage: DDD_TIMEOUT=60 ./ddd-wait
 
 DDD_DIR=".ddd"
 TRIGGER="$DDD_DIR/build.request"
@@ -11,18 +12,35 @@ if [ ! -d "$DDD_DIR" ]; then
     exit 1
 fi
 
+# --- Configuration ---
+# Allow timeout override via env var, default to 60 seconds
+TIMEOUT_SEC="${DDD_TIMEOUT:-60}"
+# Poll every 0.2 seconds
+SLEEP_INT=0.2
+# Calculate Max Retries: Time / Interval (Bash math is integer only, so we multiply by 5)
+MAX_RETRIES=$((TIMEOUT_SEC * 5))
+
 # 1. Trigger
 touch "$TRIGGER"
-echo "[ddd] Build triggered. Waiting..."
+echo "[ddd] Build triggered. Waiting (Timeout: ${TIMEOUT_SEC}s)..."
 
 # 2. Wait for Start (Lock Appears)
+# Give the daemon 2 seconds to pick up the signal
 for i in {1..20}; do
     if [ -f "$LOCK" ]; then break; fi
     sleep 0.1
 done
 
-# 3. Wait for Finish (Lock Vanishes)
-while [ -f "$LOCK" ]; do sleep 0.2; done
+# 3. Wait for Finish (Lock Vanishes) with Configurable Timeout
+count=0
+while [ -f "$LOCK" ]; do
+    if [ $count -ge $MAX_RETRIES ]; then
+        echo "Error: Build timed out (> ${TIMEOUT_SEC}s) or daemon crashed."
+        exit 1
+    fi
+    sleep $SLEEP_INT
+    count=$((count+1))
+done
 
 # 4. Show Result
 echo "---------------------------------------------------"

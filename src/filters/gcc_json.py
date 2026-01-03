@@ -34,5 +34,21 @@ class GccJsonFilter(BaseFilter):
                 
             results.append(entry)
             
+        # --- CRITICAL FIX: Silent Failure Detection ---
+        # If text exists but no standard errors were found, the build might have 
+        # failed due to Linker errors, Missing Makefiles, or Segmentation faults.
+        # We inject a synthetic error so the AI knows something is wrong.
+        if not results and text.strip():
+            # Check for common failure keywords to avoid false positives on success logs
+            # If the log is just "Nothing to be done", we shouldn't error.
+            # But usually this filter is used when things go WRONG.
+            # We take a safe approach: capture the first few lines of raw output.
+            results.append({
+                "file": "build.log",
+                "line": 0,
+                "type": "error",
+                "message": f"Build Output (Unparseable):\n{text.strip()[:1000]}"
+            })
+
         # Return indented JSON for readability (AI can read it fine, humans too)
         return json.dumps(results, indent=2)

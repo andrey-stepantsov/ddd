@@ -60,12 +60,13 @@ DDD uses a dedicated hidden directory to avoid polluting your source tree.
 To prevent infinite loops and broken builds, the Daemon **ignores all file changes** except one.
 
 1.  **Edit:** Modify as many files as needed.
-2.  **Signal:** Run `touch .ddd/build.request`.
+2.  **Signal:** Run `touch .ddd/build.request` (or use the `ddd-wait` client).
 3.  **React:** Daemon sees signal -> Runs Build -> Runs Verify.
 4.  **Feedback:** Read `.ddd/build.log` to check for errors and iterate.
 
-### 4. Configuration
+### 4. Configuration & Environment
 
+#### Build Configuration
 Create `.ddd/config.json` in your project root to define your targets.
 
 ```json
@@ -84,6 +85,14 @@ Create `.ddd/config.json` in your project root to define your targets.
     }
   }
 }
+```
+
+#### Client Configuration
+The `ddd-wait` client has a built-in safety timeout (default: 60 seconds) to prevent hanging if the daemon crashes or the build stalls. You can override this for longer builds using the `DDD_TIMEOUT` environment variable:
+
+```bash
+# Wait up to 2 minutes (120 seconds) for the build
+DDD_TIMEOUT=120 ddd-wait
 ```
 
 ### 5. The Pipeline Workflow
