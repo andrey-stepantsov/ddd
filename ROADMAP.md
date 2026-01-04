@@ -3,53 +3,38 @@
 ## Strategic Goals
 1.  **Reliability:** The daemon must never hang or crash silently.
 2.  **Extensibility:** Users can add build parsers (plugins) without modifying core source.
-3.  **Observability:** AI agents must receive structured, machine-readable errors.
+3.  **Observability:** AI agents must receive structured, machine-readable errors and metrics.
 
 ---
 
-## 🏗 Phase 1: The Test Harness (Immediate Priority)
-**Goal:** Replace fragile shell scripts with a robust Python testing framework to enable safe refactoring.
+## 🚀 Upcoming: The "Service" Era (v0.6.0)
+**Goal:** Transition DDD from a foreground tool to a proper background service.
 
-* [ ] **Switch to Pytest:**
-    * Create `requirements-dev.txt` (keep `requirements.txt` lean).
-    * Add `pytest` and `coverage`.
-* [ ] **Port Core Tests:**
-    * Convert `tests/run_tests.sh` logic into `tests/test_daemon.py`.
-    * Use `subprocess` to spawn the daemon and verify Lock/Log protocols.
-* [ ] **Unit Tests:**
-    * Ensure `src/filters.py` has native unit tests using `pytest` fixtures.
+* [ ] **Native Daemonization:**
+    * Support `--start` (launch in background) and `--stop` (kill via PID file).
+    * Integration with systemd (Linux) and launchd (macOS).
+* [ ] **Process Management:**
+    * Daemon should enforce timeouts on child processes (`make`), not just the client.
+    * Prevent zombie builds if the client disconnects.
 
-## 🔌 Phase 2: The Plugin Bus
-**Goal:** Decouple filter logic from the daemon core. Support a "Cascade" of plugin sources.
-
-* [ ] **Refactor Filter Registry:**
-    * Deprecate hardcoded imports in `src/filters.py`.
-    * Implement dynamic `importlib` loader.
-* [ ] **Implement "The Cascade" (Load Order):**
-    1.  Project Local: `.ddd/filters/*.py` (High Priority)
-    2.  User Global: `~/.config/ddd/filters/*.py`
-    3.  Built-in: `src/filters/*.py` (Defaults)
-
-## 🧪 Phase 3: Plugin Reliability
-**Goal:** Ensure plugins are robust "Micro-Libraries" with their own tests.
-
-* [ ] **"Test Where You Live" Standard:**
-    * Enforce rule: Every `my_filter.py` must have a sibling `test_my_filter.py`.
-* [ ] **Test Discovery:**
-    * Configure `pytest` to scan `.ddd/filters/` and `~/.config/ddd/filters/` for tests.
-    * Create a helper `ddd-test` command that runs core tests + active plugin tests.
-
-## 🧠 Phase 4: Structured Logging
-**Goal:** Provide AI with JSON-formatted error logs for high-precision fixing.
-
-* [ ] **Create `gcc_json` Plugin:**
-    * Implement regex parsers for GCC/Clang output.
-    * Return JSON: `[{"file": "main.c", "line": 10, "error": "missing ;"}]`.
-* [ ] **Integration:**
-    * Verify Aider can consume and act on this JSON data.
+## 🔮 Future Backlog
+* [ ] **Dependency Graphing:**
+    * Integrate `cscope` or `clang-query` to help agents understand "Callers" and "Callees".
+* [ ] **Remote Builders:**
+    * Allow the Daemon to dispatch builds to a remote docker host (e.g., rigid cloud build agents).
 
 ---
 
-## 🛡 Future Ideas (Backlog)
-* **Native Daemonization:** Support `--start/--stop` arguments to detach from terminal.
-* **Process Management:** Add timeouts to `config.json` to prevent zombie builds.
+## ✅ Completed History
+
+### v0.5.0: Observability (Jan 2026)
+* [x] **Build Metrics:** Footer in `build.log` with Duration, Compression Ratio, and Token Usage.
+* [x] **Noise Reduction:** Refined metrics to clearly indicate "Noise Reduction" vs "Compression".
+
+### v0.4.0: The Plugin Architecture (Dec 2025)
+* [x] **Phase 4: Structured Logging:** `gcc_json` filter for machine-readable errors.
+* [x] **Phase 3: Plugin Reliability:** `ddd-test` runner for user plugins.
+* [x] **Phase 2: The Plugin Bus:** "Cascade" loading (Built-in -> User -> Project).
+
+### v0.3.0: The Test Harness (Nov 2025)
+* [x] **Phase 1: Pytest Migration:** Replaced shell scripts with `pytest` suite.

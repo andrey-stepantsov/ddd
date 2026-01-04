@@ -56,11 +56,6 @@ class RequestHandler(FileSystemEventHandler):
             # --- CRITICAL FIX: Path Resolution for Injected Script ---
             # The injected script lives INSIDE .ddd/, so we must ensure it calculates 
             # DDD_DIR relative to itself (absolute path), rather than assuming PWD.
-            # We replace the default definition with the robust directory resolution.
-            
-            # Old: DDD_DIR=".ddd"
-            # New: DDD_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-            
             patched_content = content.replace(
                 'DDD_DIR=".ddd"', 
                 'DDD_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"'
@@ -104,6 +99,8 @@ class RequestHandler(FileSystemEventHandler):
                 os.remove(LOCK_FILE)
 
     def _execute_logic(self):
+        start_time = time.time()
+        
         # [HOT RELOAD] Scan for new/updated plugins before every build
         load_plugins(project_root=os.getcwd())
         
@@ -116,6 +113,10 @@ class RequestHandler(FileSystemEventHandler):
             print(f"[-] Target '{target_name}' not found.")
             return
 
+        # Metrics Accumulators
+        total_raw_bytes = 0
+        total_clean_bytes = 0
+
         with open(LOG_FILE, "w") as f_clean, open(RAW_LOG_FILE, "w") as f_raw:
             header = f"=== Pipeline: {target_name} ({time.ctime()}) ===\n"
             f_clean.write(header)
@@ -123,19 +124,50 @@ class RequestHandler(FileSystemEventHandler):
             
             # --- STAGE 1: BUILD ---
             build_cfg = target.get("build", {})
-            if self._run_stage("BUILD", build_cfg, f_clean, f_raw) == False:
+            success, raw_len, clean_len = self._run_stage("BUILD", build_cfg, f_clean, f_raw)
+            total_raw_bytes += raw_len
+            total_clean_bytes += clean_len
+            
+            if not success:
+                self._write_stats(f_clean, start_time, total_raw_bytes, total_clean_bytes)
                 return 
 
             # --- STAGE 2: VERIFY ---
             verify_cfg = target.get("verify", {})
             if "cmd" in verify_cfg:
-                self._run_stage("VERIFY", verify_cfg, f_clean, f_raw)
+                _, raw_len, clean_len = self._run_stage("VERIFY", verify_cfg, f_clean, f_raw)
+                total_raw_bytes += raw_len
+                total_clean_bytes += clean_len
+
+            # --- METRICS FOOTER ---
+            self._write_stats(f_clean, start_time, total_raw_bytes, total_clean_bytes)
 
         print(f"[*] Pipeline Complete.")
 
+    def _write_stats(self, f_handle, start_time, raw_bytes, clean_bytes):
+        duration = time.time() - start_time
+        tokens = int(clean_bytes / 4)
+        
+        # Calculate reduction
+        if raw_bytes > 0:
+            reduction = (1 - (clean_bytes / raw_bytes)) * 100
+        else:
+            reduction = 0.0
+
+        stats = (
+            f"\n--- 📊 Build Stats ---\n"
+            f"⏱  Duration: {duration:.2f}s\n"
+            f"📉 Noise Reduction: {reduction:.1f}% ({raw_bytes} raw → {clean_bytes} clean bytes)\n"
+            f"🪙  Est. Tokens: {tokens}\n"
+        )
+        f_handle.write(stats)
+
     def _run_stage(self, name, stage_config, f_clean, f_raw):
+        """
+        Returns: (Success: bool, RawBytes: int, CleanBytes: int)
+        """
         cmd = stage_config.get("cmd")
-        if not cmd: return True 
+        if not cmd: return (True, 0, 0)
 
         print(f"[+] Running {name}: {cmd}")
         f_raw.write(f"\n--- {name} RAW OUTPUT ---\n")
@@ -156,10 +188,13 @@ class RequestHandler(FileSystemEventHandler):
         )
         
         raw_output_buffer = []
+        raw_bytes = 0
+        
         for line in process.stdout:
             print(line, end='')
             f_raw.write(line)
             raw_output_buffer.append(line)
+            raw_bytes += len(line)
         
         process.wait()
 
@@ -175,13 +210,16 @@ class RequestHandler(FileSystemEventHandler):
             processor = FilterClass(stage_config)
             current_text = processor.process(current_text)
 
+        clean_bytes = len(current_text)
+
         f_clean.write(f"\n--- {name} OUTPUT ---\n")
         f_clean.write(current_text)
 
         if process.returncode != 0:
             print(f"[-] {name} Failed.")
-            return False
-        return True
+            return (False, raw_bytes, clean_bytes)
+            
+        return (True, raw_bytes, clean_bytes)
 
     def on_modified(self, event):
         if os.path.basename(event.src_path) == TRIGGER_FILENAME:

@@ -1,12 +1,7 @@
 # Project TODOs
 
-## 🚧 Active Sprint: Observability (v0.5.0)
-- [ ] **Build Summary Stats**
-    - **Goal:** Provide the AI with feedback on the "cost" and speed of the build.
-    - **Task:** Append a footer to `build.log` with processing metrics:
-        - Raw Log Size vs. Filtered Output Size (Compression ratio).
-        - Duration (Seconds).
-        - Token Estimate (Approx. 4 chars per token).
+## 🚧 Active Sprint
+*(No active tasks. Ready for v0.5.0 Release Candidate)*
 
 ## 🔮 Backlog & Future Improvements
 - [ ] **Native Daemonization**
@@ -17,9 +12,13 @@
 - [ ] **Dependency Graphing (Integration)**
     - Investigate integrating `cscope` or `clang-query` to feed better context to the AI (Planned for `aider-vertex`).
 
-## ✅ Recently Completed (v0.4.x)
+## ✅ Recently Completed (v0.5.0)
 
-### Reliability & Fixes
+### Observability
+- [x] **Build Summary Stats**
+    - Appended footer to `build.log` with Duration, Noise Reduction %, and Token Estimates.
+
+### Reliability & Fixes (v0.4.x)
 - [x] **Fix `wait` Client Tool Path Resolution**
     - Injected script now correctly resolves `DDD_DIR` relative to itself using `dirname "${BASH_SOURCE[0]}"`.
 - [x] **Fix Silent Failures in JSON Filter**
@@ -28,14 +27,3 @@
     - Daemon unconditionally deletes `*.lock` files in `.ddd/` on startup to recover from crashes.
 - [x] **Client Safety Timeout**
     - `ddd-wait` now accepts `DDD_TIMEOUT` (default: 60s) to prevent hanging on stalled builds.
-
-### Architecture (Completed Roadmap Items)
-- [x] **Phase 1: Test Harness**
-    - Ported legacy shell scripts to `pytest` (`tests/test_daemon.py`).
-    - Added unit tests for filters (`tests/test_filters.py`).
-- [x] **Phase 2: Plugin Bus**
-    - Implemented dynamic "Cascade" loading (Built-in -> User Global -> Project Local) in `src/filters/__init__.py`.
-- [x] **Phase 3: Plugin Reliability**
-    - Created `ddd-test` runner to discover and test custom user plugins.
-- [x] **Phase 4: Structured Logging**
-    - Implemented `gcc_json` filter to parse GCC/Clang output into machine-readable JSON arrays.
