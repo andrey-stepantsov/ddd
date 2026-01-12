@@ -5,8 +5,8 @@ import subprocess
 import time
 import sys
 import stat
-import glob
 import shutil
+import argparse
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
@@ -15,21 +15,18 @@ sys.stdout.reconfigure(line_buffering=True)
 sys.stderr.reconfigure(line_buffering=True)
 
 # --- Namespace Resolution ---
-CURRENT_DIR = os.path.dirname(os.path.abspath(__file__)) # .../tools/ddd/src
-TOOL_ROOT = os.path.dirname(CURRENT_DIR)                 # .../tools/ddd
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+TOOL_ROOT = os.path.dirname(CURRENT_DIR)
 
 if TOOL_ROOT not in sys.path:
     sys.path.insert(0, TOOL_ROOT)
 
 from src.filters import load_plugins, REGISTRY
 
-# --- Constants (PROJECT LOCAL ARCHITECTURE) ---
-# We assume CWD is the project root
+# --- Constants ---
 DDD_DIR = ".ddd"
 RUN_DIR = os.path.join(DDD_DIR, "run")
 CONFIG_FILE = os.path.join(DDD_DIR, "config.json")
-
-# Mutable State (In .ddd/run)
 TRIGGER_FILE = os.path.join(RUN_DIR, "build.request")
 LOG_FILE = os.path.join(RUN_DIR, "build.log")
 RAW_LOG_FILE = os.path.join(RUN_DIR, "last_build.raw.log")
@@ -46,21 +43,14 @@ class RequestHandler(FileSystemEventHandler):
         self.inject_client()
 
     def inject_client(self):
-        """Injects the wait client into .ddd/wait for easy access."""
         if not os.path.exists(MASTER_CLIENT_PATH):
             print(f"[!] Warning: Master client not found at {MASTER_CLIENT_PATH}")
             return
         try:
             with open(MASTER_CLIENT_PATH, 'r') as f_src:
                 content = f_src.read()
-            
-            # Patch the script to find itself relative to project root
-            # The client usually lives in .ddd/wait, so DDD_DIR is $(dirname $0)
-            patched_content = content
-            
             with open(INJECTED_CLIENT, "w") as f_dst:
-                f_dst.write(patched_content)
-            
+                f_dst.write(content)
             st = os.stat(INJECTED_CLIENT)
             os.chmod(INJECTED_CLIENT, st.st_mode | stat.S_IEXEC)
         except Exception as e:
@@ -80,17 +70,14 @@ class RequestHandler(FileSystemEventHandler):
         if time.time() - self.last_run < self.cooldown:
             return
         self.last_run = time.time()
-
         print(f"\n[>>>] Signal received: {TRIGGER_FILE}")
         
-        # 1. SET BUSY SIGNAL
         with open(LOCK_FILE, 'w') as f:
             f.write(str(time.time()))
 
         try:
             self._execute_logic()
         finally:
-            # 2. CLEAR BUSY SIGNAL
             if os.path.exists(LOCK_FILE):
                 os.remove(LOCK_FILE)
 
@@ -107,7 +94,6 @@ class RequestHandler(FileSystemEventHandler):
             print(f"[-] Target '{target_name}' not found.")
             return
 
-        # Metrics Accumulators
         total_raw_bytes = 0
         total_clean_bytes = 0
 
@@ -133,7 +119,6 @@ class RequestHandler(FileSystemEventHandler):
                 total_raw_bytes += raw_len
                 total_clean_bytes += clean_len
 
-            # METRICS FOOTER
             self._write_stats(f_clean, start_time, total_raw_bytes, total_clean_bytes)
 
         print(f"[*] Pipeline Complete.")
@@ -214,10 +199,16 @@ class RequestHandler(FileSystemEventHandler):
             self.run_pipeline()
 
 if __name__ == "__main__":
+    # --- 1. Argument Parsing ---
+    parser = argparse.ArgumentParser(description="DDD: Distributed Developer Daemon")
+    parser.add_argument("--version", action="version", version="%(prog)s 0.6.1")
+    # --help is added automatically by argparse
+    args = parser.parse_args()
+
+    # --- 2. Main Execution ---
     if not os.path.exists(DDD_DIR):
         os.makedirs(DDD_DIR)
     
-    # --- Clean Runtime State ---
     if os.path.exists(RUN_DIR):
         shutil.rmtree(RUN_DIR)
     os.makedirs(RUN_DIR)
@@ -227,7 +218,6 @@ if __name__ == "__main__":
     
     event_handler = RequestHandler()
     observer = Observer()
-    # WATCH THE RUN DIR, NOT DDD DIR
     observer.schedule(event_handler, path=RUN_DIR, recursive=False)
     observer.start()
 
