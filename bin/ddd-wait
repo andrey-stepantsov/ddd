@@ -1,13 +1,10 @@
 #!/bin/bash
-# ddd-wait: Project Local Client
+# ddd-wait: Project Local Client (Strict Mode)
 # Usage: DDD_TIMEOUT=60 ./ddd-wait
 
-# Find .ddd relative to this script (assuming this script is inside .ddd/wait)
-# If invoked from tools/ddd/bin/ddd-wait, we need to handle that too, 
-# but mostly this is for the injected copy.
 DDD_DIR=".ddd"
 if [ ! -d "$DDD_DIR" ]; then
-    # Fallback if running from source location
+    # Fallback to parent if running inside a subdir
     if [ -d "../../.ddd" ]; then DDD_DIR="../../.ddd"; fi
 fi
 
@@ -21,7 +18,7 @@ if [ ! -d "$DDD_DIR" ]; then
     exit 1
 fi
 
-# Ensure Run Dir exists (Daemon should make it, but safety first)
+# Ensure run directory exists
 mkdir -p "$RUN_DIR"
 
 TIMEOUT_SEC="${DDD_TIMEOUT:-60}"
@@ -30,19 +27,30 @@ MAX_RETRIES=$((TIMEOUT_SEC * 5))
 
 # 1. Trigger
 touch "$TRIGGER"
-echo "[ddd] Build triggered. Waiting (Timeout: ${TIMEOUT_SEC}s)..."
+echo "[ddd] Build triggered. Waiting for Daemon (Timeout: ${TIMEOUT_SEC}s)..."
 
-# 2. Wait for Start (Lock Appears)
+# 2. Wait for Start (Lock Appears) - STRICT CHECK
+LOCK_ACQUIRED=0
+# Wait up to 2 seconds for the daemon to pick it up
 for i in {1..20}; do
-    if [ -f "$LOCK" ]; then break; fi
+    if [ -f "$LOCK" ]; then 
+        LOCK_ACQUIRED=1
+        break
+    fi
     sleep 0.1
 done
+
+# CRITICAL FIX: If no lock appeared, the daemon is dead. Fail immediately.
+if [ $LOCK_ACQUIRED -eq 0 ]; then
+    echo "❌ Error: Daemon did not respond. Is 'dd-daemon' running?"
+    exit 1
+fi
 
 # 3. Wait for Finish (Lock Vanishes)
 count=0
 while [ -f "$LOCK" ]; do
     if [ $count -ge $MAX_RETRIES ]; then
-        echo "Error: Build timed out (> ${TIMEOUT_SEC}s) or daemon crashed."
+        echo "Error: Build timed out (> ${TIMEOUT_SEC}s)."
         exit 1
     fi
     sleep $SLEEP_INT
