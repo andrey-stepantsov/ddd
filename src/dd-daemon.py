@@ -6,6 +6,7 @@ import time
 import sys
 import stat
 import glob
+import shutil
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
@@ -13,29 +14,30 @@ from watchdog.events import FileSystemEventHandler
 sys.stdout.reconfigure(line_buffering=True)
 sys.stderr.reconfigure(line_buffering=True)
 
-# --- CRITICAL FIX: Standardize Namespace to 'src.filters' ---
-# 1. Resolve paths
-CURRENT_DIR = os.path.dirname(os.path.abspath(__file__)) # .../src
-REPO_ROOT = os.path.dirname(CURRENT_DIR)                 # .../ (Root)
+# --- Namespace Resolution ---
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__)) # .../tools/ddd/src
+TOOL_ROOT = os.path.dirname(CURRENT_DIR)                 # .../tools/ddd
 
-# 2. Add Repo Root to sys.path so we can import 'src.filters'
-if REPO_ROOT not in sys.path:
-    sys.path.insert(0, REPO_ROOT)
+if TOOL_ROOT not in sys.path:
+    sys.path.insert(0, TOOL_ROOT)
 
-# 3. Import using the full namespace (matches plugins)
 from src.filters import load_plugins, REGISTRY
 
-# --- Constants ---
+# --- Constants (PROJECT LOCAL ARCHITECTURE) ---
+# We assume CWD is the project root
 DDD_DIR = ".ddd"
+RUN_DIR = os.path.join(DDD_DIR, "run")
 CONFIG_FILE = os.path.join(DDD_DIR, "config.json")
-TRIGGER_FILENAME = "build.request"
-LOG_FILE = os.path.join(DDD_DIR, "build.log")
-RAW_LOG_FILE = os.path.join(DDD_DIR, "last_build.raw.log")
-LOCK_FILE = os.path.join(DDD_DIR, "run.lock")
-INJECTED_CLIENT = os.path.join(DDD_DIR, "wait")
 
-# Path to the Master Copy in the repo (../bin/ddd-wait)
-MASTER_CLIENT_PATH = os.path.abspath(os.path.join(CURRENT_DIR, "..", "bin", "ddd-wait"))
+# Mutable State (In .ddd/run)
+TRIGGER_FILE = os.path.join(RUN_DIR, "build.request")
+LOG_FILE = os.path.join(RUN_DIR, "build.log")
+RAW_LOG_FILE = os.path.join(RUN_DIR, "last_build.raw.log")
+LOCK_FILE = os.path.join(RUN_DIR, "ipc.lock")
+
+# Client Injection
+INJECTED_CLIENT = os.path.join(DDD_DIR, "wait")
+MASTER_CLIENT_PATH = os.path.abspath(os.path.join(TOOL_ROOT, "bin", "ddd-wait"))
 
 class RequestHandler(FileSystemEventHandler):
     def __init__(self):
@@ -44,29 +46,23 @@ class RequestHandler(FileSystemEventHandler):
         self.inject_client()
 
     def inject_client(self):
-        """Reads master client from bin/ and injects it into .ddd/wait with path fixes."""
+        """Injects the wait client into .ddd/wait for easy access."""
         if not os.path.exists(MASTER_CLIENT_PATH):
             print(f"[!] Warning: Master client not found at {MASTER_CLIENT_PATH}")
             return
-
         try:
             with open(MASTER_CLIENT_PATH, 'r') as f_src:
                 content = f_src.read()
             
-            # --- CRITICAL FIX: Path Resolution for Injected Script ---
-            # The injected script lives INSIDE .ddd/, so we must ensure it calculates 
-            # DDD_DIR relative to itself (absolute path), rather than assuming PWD.
-            patched_content = content.replace(
-                'DDD_DIR=".ddd"', 
-                'DDD_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"'
-            )
-
+            # Patch the script to find itself relative to project root
+            # The client usually lives in .ddd/wait, so DDD_DIR is $(dirname $0)
+            patched_content = content
+            
             with open(INJECTED_CLIENT, "w") as f_dst:
                 f_dst.write(patched_content)
             
             st = os.stat(INJECTED_CLIENT)
             os.chmod(INJECTED_CLIENT, st.st_mode | stat.S_IEXEC)
-            print(f"[*] Injected client tool: {INJECTED_CLIENT}")
         except Exception as e:
             print(f"[!] Failed to inject client: {e}")
 
@@ -85,7 +81,7 @@ class RequestHandler(FileSystemEventHandler):
             return
         self.last_run = time.time()
 
-        print(f"\n[>>>] Signal received: {TRIGGER_FILENAME}")
+        print(f"\n[>>>] Signal received: {TRIGGER_FILE}")
         
         # 1. SET BUSY SIGNAL
         with open(LOCK_FILE, 'w') as f:
@@ -100,8 +96,6 @@ class RequestHandler(FileSystemEventHandler):
 
     def _execute_logic(self):
         start_time = time.time()
-        
-        # [HOT RELOAD] Scan for new/updated plugins before every build
         load_plugins(project_root=os.getcwd())
         
         config = self.load_config()
@@ -122,7 +116,7 @@ class RequestHandler(FileSystemEventHandler):
             f_clean.write(header)
             f_raw.write(header)
             
-            # --- STAGE 1: BUILD ---
+            # STAGE 1: BUILD
             build_cfg = target.get("build", {})
             success, raw_len, clean_len = self._run_stage("BUILD", build_cfg, f_clean, f_raw)
             total_raw_bytes += raw_len
@@ -132,14 +126,14 @@ class RequestHandler(FileSystemEventHandler):
                 self._write_stats(f_clean, start_time, total_raw_bytes, total_clean_bytes)
                 return 
 
-            # --- STAGE 2: VERIFY ---
+            # STAGE 2: VERIFY
             verify_cfg = target.get("verify", {})
             if "cmd" in verify_cfg:
                 _, raw_len, clean_len = self._run_stage("VERIFY", verify_cfg, f_clean, f_raw)
                 total_raw_bytes += raw_len
                 total_clean_bytes += clean_len
 
-            # --- METRICS FOOTER ---
+            # METRICS FOOTER
             self._write_stats(f_clean, start_time, total_raw_bytes, total_clean_bytes)
 
         print(f"[*] Pipeline Complete.")
@@ -147,8 +141,6 @@ class RequestHandler(FileSystemEventHandler):
     def _write_stats(self, f_handle, start_time, raw_bytes, clean_bytes):
         duration = time.time() - start_time
         tokens = int(clean_bytes / 4)
-        
-        # Calculate reduction
         if raw_bytes > 0:
             reduction = (1 - (clean_bytes / raw_bytes)) * 100
         else:
@@ -163,16 +155,12 @@ class RequestHandler(FileSystemEventHandler):
         f_handle.write(stats)
 
     def _run_stage(self, name, stage_config, f_clean, f_raw):
-        """
-        Returns: (Success: bool, RawBytes: int, CleanBytes: int)
-        """
         cmd = stage_config.get("cmd")
         if not cmd: return (True, 0, 0)
 
         print(f"[+] Running {name}: {cmd}")
         f_raw.write(f"\n--- {name} RAW OUTPUT ---\n")
         
-        # --- CHAINING LOGIC ---
         filter_entry = stage_config.get("filter", "raw")
         if isinstance(filter_entry, str):
             filter_names = [filter_entry]
@@ -198,20 +186,16 @@ class RequestHandler(FileSystemEventHandler):
         
         process.wait()
 
-        # Apply Filters Sequentially
         current_text = "".join(raw_output_buffer)
-        
         for fname in filter_names:
             FilterClass = REGISTRY.get(fname)
             if not FilterClass:
                 print(f"[!] Warning: Filter '{fname}' not found. Skipping.")
                 continue
-                
             processor = FilterClass(stage_config)
             current_text = processor.process(current_text)
 
         clean_bytes = len(current_text)
-
         f_clean.write(f"\n--- {name} OUTPUT ---\n")
         f_clean.write(current_text)
 
@@ -222,34 +206,29 @@ class RequestHandler(FileSystemEventHandler):
         return (True, raw_bytes, clean_bytes)
 
     def on_modified(self, event):
-        if os.path.basename(event.src_path) == TRIGGER_FILENAME:
+        if os.path.basename(event.src_path) == "build.request":
             self.run_pipeline()
             
     def on_created(self, event):
-        if os.path.basename(event.src_path) == TRIGGER_FILENAME:
+        if os.path.basename(event.src_path) == "build.request":
             self.run_pipeline()
 
 if __name__ == "__main__":
     if not os.path.exists(DDD_DIR):
         os.makedirs(DDD_DIR)
     
-    # --- CRITICAL FIX: Stale Lock Cleanup ---
-    # Unconditionally remove ALL .lock files in .ddd on startup
-    # This recovers from SIGKILL/Crashes where run.lock remains
-    lock_pattern = os.path.join(DDD_DIR, "*.lock")
-    for lock_file in glob.glob(lock_pattern):
-        try:
-            os.remove(lock_file)
-            print(f"[*] Cleanup: Removed stale lock {lock_file}")
-        except OSError as e:
-            print(f"[!] Cleanup Error: {e}")
-
+    # --- Clean Runtime State ---
+    if os.path.exists(RUN_DIR):
+        shutil.rmtree(RUN_DIR)
+    os.makedirs(RUN_DIR)
+    
     print(f"[*] dd-daemon ACTIVE.")
-    print(f"[*] Watching: {DDD_DIR}/")
+    print(f"[*] Watching: {RUN_DIR}/build.request")
     
     event_handler = RequestHandler()
     observer = Observer()
-    observer.schedule(event_handler, path=DDD_DIR, recursive=False)
+    # WATCH THE RUN DIR, NOT DDD DIR
+    observer.schedule(event_handler, path=RUN_DIR, recursive=False)
     observer.start()
 
     try:

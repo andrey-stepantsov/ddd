@@ -3,55 +3,41 @@ import subprocess
 import sys
 import os
 import time
-import signal
 from pathlib import Path
 
-# Identify project root relative to this file
-REPO_ROOT = Path(__file__).parent.parent.resolve()
-
-# --- CRITICAL FIX: Add project root to sys.path ---
-# This allows tests to run 'from src.filters import ...'
-sys.path.insert(0, str(REPO_ROOT))
+# Identify tool root (where src/ is)
+TOOL_ROOT = Path(__file__).parent.parent.resolve()
+sys.path.insert(0, str(TOOL_ROOT))
 
 @pytest.fixture
 def ddd_workspace(tmp_path, monkeypatch):
-    """
-    Sets up an isolated workspace for a test run.
-    1. Creates a temp directory (tmp_path).
-    2. Switches the CWD to that directory (monkeypatch).
-    """
+    """Isolated workspace."""
     monkeypatch.chdir(tmp_path)
     return tmp_path
 
 @pytest.fixture
 def daemon_proc(ddd_workspace):
-    """
-    Spawns the dd-daemon in the background of the workspace.
-    Mimics the logic of 'tests/run_tests.sh':
-    1. Starts daemon.
-    2. Waits for startup.
-    3. Yields process.
-    4. Kills on teardown.
-    """
-    # Define logs within the temp workspace
+    """Spawns daemon and waits for startup."""
     daemon_log = ddd_workspace / "daemon_test.log"
     
-    # Start the daemon using the same Python interpreter running pytest
+    # Start Daemon
     with open(daemon_log, "w") as log_file:
         proc = subprocess.Popen(
-            [sys.executable, str(REPO_ROOT / "src" / "dd-daemon.py")],
+            [sys.executable, str(TOOL_ROOT / "src" / "dd-daemon.py")],
             stdout=log_file,
             stderr=subprocess.STDOUT,
             cwd=ddd_workspace,
             text=True
         )
 
-    # Startup Check: Wait for .ddd directory to appear (Timeout: 2s)
+    # Wait for .ddd and .ddd/run to appear
     ddd_dir = ddd_workspace / ".ddd"
+    run_dir = ddd_dir / "run"
+    
     start = time.time()
     started = False
-    while time.time() - start < 2.0:
-        if ddd_dir.exists() and proc.poll() is None:
+    while time.time() - start < 3.0:
+        if run_dir.exists() and proc.poll() is None:
             started = True
             break
         time.sleep(0.1)
@@ -60,11 +46,11 @@ def daemon_proc(ddd_workspace):
         if daemon_log.exists():
             print(f"\n[!] Daemon Log:\n{daemon_log.read_text()}")
         proc.terminate()
-        pytest.fail("Daemon failed to initialize .ddd directory.")
+        pytest.fail("Daemon failed to initialize .ddd/run directory.")
 
     yield proc
 
-    # Teardown: Kill the daemon
+    # Teardown
     if proc.poll() is None:
         proc.terminate()
         try:

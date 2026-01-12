@@ -1,0 +1,7 @@
+#!/bin/bash
+DIR="$(cd "$(dirname "$0")" && pwd)"
+BOOTSTRAP="$DIR/../bootstrap.sh"
+SCRIPT="$DIR/../src/dd-daemon.py"
+
+# Self-Bootstrap and Run
+exec "$BOOTSTRAP" "$SCRIPT" "$@"

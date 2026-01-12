@@ -2,14 +2,12 @@ import pytest
 import json
 import time
 import sys
-import textwrap  # <--- Added this
+import textwrap
 from pathlib import Path
 
 # Ensure we can import src
-REPO_ROOT = Path(__file__).parent.parent.resolve()
-sys.path.insert(0, str(REPO_ROOT))
-
-from src.filters import load_plugins
+TOOL_ROOT = Path(__file__).parent.parent.resolve()
+sys.path.insert(0, str(TOOL_ROOT))
 
 def test_filter_chaining_logic(ddd_workspace, daemon_proc):
     """
@@ -17,16 +15,17 @@ def test_filter_chaining_logic(ddd_workspace, daemon_proc):
     Chain: Raw Input -> Filter A -> Filter B -> Final Log
     """
     
-    # 1. Define Paths
+    # 1. Define Paths (UPDATED for Split-State)
     ddd_dir = ddd_workspace / ".ddd"
+    run_dir = ddd_dir / "run"           # <--- NEW
     filters_dir = ddd_dir / "filters"
     filters_dir.mkdir(parents=True, exist_ok=True)
+    
     config_file = ddd_dir / "config.json"
-    trigger_file = ddd_dir / "build.request"
-    clean_log = ddd_dir / "build.log"
+    trigger_file = run_dir / "build.request" # <--- NEW
+    clean_log = run_dir / "build.log"        # <--- NEW
 
     # 2. Create Custom Filter A (Appends tag A)
-    # FIX: Use dedent to remove indentation so the file is valid Python
     code_a = textwrap.dedent("""
         from src.filters import register_filter
         from src.filters.base import BaseFilter

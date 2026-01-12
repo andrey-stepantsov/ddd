@@ -1,23 +1,31 @@
 #!/bin/bash
-# ddd-wait: Trigger a build and wait for the result.
+# ddd-wait: Project Local Client
 # Usage: DDD_TIMEOUT=60 ./ddd-wait
 
+# Find .ddd relative to this script (assuming this script is inside .ddd/wait)
+# If invoked from tools/ddd/bin/ddd-wait, we need to handle that too, 
+# but mostly this is for the injected copy.
 DDD_DIR=".ddd"
-TRIGGER="$DDD_DIR/build.request"
-LOCK="$DDD_DIR/run.lock"
-LOG="$DDD_DIR/build.log"
+if [ ! -d "$DDD_DIR" ]; then
+    # Fallback if running from source location
+    if [ -d "../../.ddd" ]; then DDD_DIR="../../.ddd"; fi
+fi
+
+RUN_DIR="$DDD_DIR/run"
+TRIGGER="$RUN_DIR/build.request"
+LOCK="$RUN_DIR/ipc.lock"
+LOG="$RUN_DIR/build.log"
 
 if [ ! -d "$DDD_DIR" ]; then
     echo "Error: .ddd directory not found in $(pwd)."
     exit 1
 fi
 
-# --- Configuration ---
-# Allow timeout override via env var, default to 60 seconds
+# Ensure Run Dir exists (Daemon should make it, but safety first)
+mkdir -p "$RUN_DIR"
+
 TIMEOUT_SEC="${DDD_TIMEOUT:-60}"
-# Poll every 0.2 seconds
 SLEEP_INT=0.2
-# Calculate Max Retries: Time / Interval (Bash math is integer only, so we multiply by 5)
 MAX_RETRIES=$((TIMEOUT_SEC * 5))
 
 # 1. Trigger
@@ -25,13 +33,12 @@ touch "$TRIGGER"
 echo "[ddd] Build triggered. Waiting (Timeout: ${TIMEOUT_SEC}s)..."
 
 # 2. Wait for Start (Lock Appears)
-# Give the daemon 2 seconds to pick up the signal
 for i in {1..20}; do
     if [ -f "$LOCK" ]; then break; fi
     sleep 0.1
 done
 
-# 3. Wait for Finish (Lock Vanishes) with Configurable Timeout
+# 3. Wait for Finish (Lock Vanishes)
 count=0
 while [ -f "$LOCK" ]; do
     if [ $count -ge $MAX_RETRIES ]; then
@@ -44,5 +51,9 @@ done
 
 # 4. Show Result
 echo "---------------------------------------------------"
-cat "$LOG"
+if [ -f "$LOG" ]; then
+    cat "$LOG"
+else
+    echo "Error: No build log found at $LOG"
+fi
 echo "---------------------------------------------------"
