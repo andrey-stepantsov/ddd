@@ -6,6 +6,7 @@ import time
 import sys
 import stat
 import shutil
+import shlex  # <--- NEW: Added for safe quoting
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
@@ -154,9 +155,12 @@ class RequestHandler(FileSystemEventHandler):
         cmd = stage_config.get("cmd")
         if not cmd: return (True, 0, 0)
 
-        # --- TASK 1: Force Line Buffering ---
+        # --- FIX: Safe Buffering Injection ---
+        # We must wrap the command in 'sh -c' so stdbuf has a valid binary (sh) to execute,
+        # which then interprets cd, &&, etc.
         if self.stdbuf_available and not cmd.strip().startswith("stdbuf"):
-            cmd = f"stdbuf -oL -eL {cmd}"
+            safe_cmd = shlex.quote(cmd)
+            cmd = f"stdbuf -oL -eL sh -c {safe_cmd}"
             print(f"[i] Auto-buffering enabled: {cmd}")
 
         print(f"[+] Running {name}: {cmd}")
