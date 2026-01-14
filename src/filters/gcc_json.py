@@ -8,8 +8,7 @@ class GccJsonFilter(BaseFilter):
     def process(self, text):
         """
         Parses GCC/Clang output into a JSON list of error objects.
-        Input: Standard compiler output.
-        Output: JSON String.
+        Patched to allow 'Nothing to be done' as success.
         """
         results = []
         
@@ -17,7 +16,7 @@ class GccJsonFilter(BaseFilter):
         # Group 1: Filename
         # Group 2: Line
         # Group 3: Column (Optional)
-        # Group 4: Type (error/warning)
+        # Group 4: Type (error/warning/note)
         # Group 5: Message
         regex = re.compile(r"^([^:\n]+):(\d+):(?:(\d+):)?\s*(error|warning|note):\s*(.+)$", re.MULTILINE)
         
@@ -34,15 +33,14 @@ class GccJsonFilter(BaseFilter):
                 
             results.append(entry)
             
-        # --- CRITICAL FIX: Silent Failure Detection ---
-        # If text exists but no standard errors were found, the build might have 
-        # failed due to Linker errors, Missing Makefiles, or Segmentation faults.
-        # We inject a synthetic error so the AI knows something is wrong.
+        # --- SILENT FAILURE DETECTION (PATCHED) ---
         if not results and text.strip():
-            # Check for common failure keywords to avoid false positives on success logs
-            # If the log is just "Nothing to be done", we shouldn't error.
-            # But usually this filter is used when things go WRONG.
-            # We take a safe approach: capture the first few lines of raw output.
+            # FIX: If we see success markers, return empty list (Success)
+            # instead of triggering the silent failure detector.
+            if "Nothing to be done" in text or "Build finished" in text:
+                return json.dumps([])
+
+            # Otherwise, assume it's a crash (Segfault, Linker error, etc)
             results.append({
                 "file": "build.log",
                 "line": 0,
@@ -50,5 +48,4 @@ class GccJsonFilter(BaseFilter):
                 "message": f"Build Output (Unparseable):\n{text.strip()[:1000]}"
             })
 
-        # Return indented JSON for readability (AI can read it fine, humans too)
         return json.dumps(results, indent=2)

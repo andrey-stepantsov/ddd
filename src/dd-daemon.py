@@ -6,11 +6,10 @@ import time
 import sys
 import stat
 import shutil
-import argparse
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
-# --- Patch: Force Unbuffered Output ---
+# --- Patch: Force Unbuffered Output (Python Layer) ---
 sys.stdout.reconfigure(line_buffering=True)
 sys.stderr.reconfigure(line_buffering=True)
 
@@ -40,11 +39,11 @@ class RequestHandler(FileSystemEventHandler):
     def __init__(self):
         self.last_run = 0
         self.cooldown = 1.0
+        self.stdbuf_available = bool(shutil.which("stdbuf"))
         self.inject_client()
 
     def inject_client(self):
         if not os.path.exists(MASTER_CLIENT_PATH):
-            print(f"[!] Warning: Master client not found at {MASTER_CLIENT_PATH}")
             return
         try:
             with open(MASTER_CLIENT_PATH, 'r') as f_src:
@@ -97,6 +96,14 @@ class RequestHandler(FileSystemEventHandler):
         total_raw_bytes = 0
         total_clean_bytes = 0
 
+        # --- TASK 2: Sentinel Logic (Setup) ---
+        sentinel_file = target.get("sentinel_file")
+        if sentinel_file and os.path.exists(sentinel_file):
+            try:
+                os.remove(sentinel_file)
+            except OSError:
+                pass
+
         with open(LOG_FILE, "w") as f_clean, open(RAW_LOG_FILE, "w") as f_raw:
             header = f"=== Pipeline: {target_name} ({time.ctime()}) ===\n"
             f_clean.write(header)
@@ -108,7 +115,14 @@ class RequestHandler(FileSystemEventHandler):
             total_raw_bytes += raw_len
             total_clean_bytes += clean_len
             
-            if not success:
+            # --- TASK 2: Sentinel Check ---
+            sentinel_success = False
+            if sentinel_file and os.path.exists(sentinel_file):
+                print(f"[+] Sentinel found: {sentinel_file}")
+                sentinel_success = True
+                success = True
+
+            if not success and not sentinel_success:
                 self._write_stats(f_clean, start_time, total_raw_bytes, total_clean_bytes)
                 return 
 
@@ -126,10 +140,7 @@ class RequestHandler(FileSystemEventHandler):
     def _write_stats(self, f_handle, start_time, raw_bytes, clean_bytes):
         duration = time.time() - start_time
         tokens = int(clean_bytes / 4)
-        if raw_bytes > 0:
-            reduction = (1 - (clean_bytes / raw_bytes)) * 100
-        else:
-            reduction = 0.0
+        reduction = (1 - (clean_bytes / raw_bytes)) * 100 if raw_bytes > 0 else 0.0
 
         stats = (
             f"\n--- 📊 Build Stats ---\n"
@@ -142,6 +153,11 @@ class RequestHandler(FileSystemEventHandler):
     def _run_stage(self, name, stage_config, f_clean, f_raw):
         cmd = stage_config.get("cmd")
         if not cmd: return (True, 0, 0)
+
+        # --- TASK 1: Force Line Buffering ---
+        if self.stdbuf_available and not cmd.strip().startswith("stdbuf"):
+            cmd = f"stdbuf -oL -eL {cmd}"
+            print(f"[i] Auto-buffering enabled: {cmd}")
 
         print(f"[+] Running {name}: {cmd}")
         f_raw.write(f"\n--- {name} RAW OUTPUT ---\n")
@@ -157,7 +173,8 @@ class RequestHandler(FileSystemEventHandler):
             shell=True, 
             stdout=subprocess.PIPE, 
             stderr=subprocess.STDOUT,
-            text=True
+            text=True,
+            bufsize=1
         )
         
         raw_output_buffer = []
@@ -185,7 +202,7 @@ class RequestHandler(FileSystemEventHandler):
         f_clean.write(current_text)
 
         if process.returncode != 0:
-            print(f"[-] {name} Failed.")
+            print(f"[-] {name} Failed (Exit: {process.returncode}).")
             return (False, raw_bytes, clean_bytes)
             
         return (True, raw_bytes, clean_bytes)
@@ -199,13 +216,6 @@ class RequestHandler(FileSystemEventHandler):
             self.run_pipeline()
 
 if __name__ == "__main__":
-    # --- 1. Argument Parsing ---
-    parser = argparse.ArgumentParser(description="DDD: Distributed Developer Daemon")
-    parser.add_argument("--version", action="version", version="%(prog)s 0.6.1")
-    # --help is added automatically by argparse
-    args = parser.parse_args()
-
-    # --- 2. Main Execution ---
     if not os.path.exists(DDD_DIR):
         os.makedirs(DDD_DIR)
     
@@ -213,7 +223,7 @@ if __name__ == "__main__":
         shutil.rmtree(RUN_DIR)
     os.makedirs(RUN_DIR)
     
-    print(f"[*] dd-daemon ACTIVE.")
+    print(f"[*] dd-daemon ACTIVE (v0.6.2).")
     print(f"[*] Watching: {RUN_DIR}/build.request")
     
     event_handler = RequestHandler()
