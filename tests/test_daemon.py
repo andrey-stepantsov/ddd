@@ -58,3 +58,58 @@ def test_end_to_end_build_cycle(ddd_workspace, daemon_proc):
     clean_log = run_dir / "build.log"
     assert clean_log.exists()
     assert "PYTEST_BUILD_SUCCESS" in clean_log.read_text()
+    
+    # 6. Verify Artifacts (New in v0.7.0)
+    exit_file = run_dir / "build.exit"
+    result_file = run_dir / "job_result.json"
+    
+    assert exit_file.exists()
+    assert exit_file.read_text().strip() == "0"
+    
+    assert result_file.exists()
+    result = json.loads(result_file.read_text())
+    assert result["success"] is True
+    assert result["exit_code"] == 0
+    assert "metrics" in result
+    assert result["metrics"]["clean_bytes"] > 0
+
+def test_build_failure_artifacts(ddd_workspace, daemon_proc):
+    """Verifies artifacts generated on build failure."""
+    ddd_dir = ddd_workspace / ".ddd"
+    run_dir = ddd_dir / "run"
+    config_file = ddd_dir / "config.json"
+    
+    config_data = {
+        "targets": {
+            "dev": {
+                "build": { 
+                    "cmd": "echo 'FAILING' && exit 1", 
+                    "filter": "raw" 
+                }
+            }
+        }
+    }
+    config_file.write_text(json.dumps(config_data))
+
+    # Trigger
+    (run_dir / "build.request").touch()
+    
+    # Wait for completion (idle)
+    time.sleep(1.0) # Simple wait for test speed, robust via lock check loop preferred
+    lock_file = run_dir / "ipc.lock"
+    for _ in range(30):
+        if not lock_file.exists():
+            break
+        time.sleep(0.1)
+        
+    # Verify Failure Artifacts
+    exit_file = run_dir / "build.exit"
+    result_file = run_dir / "job_result.json"
+    
+    assert exit_file.exists()
+    assert exit_file.read_text().strip() != "0"
+    
+    assert result_file.exists()
+    result = json.loads(result_file.read_text())
+    assert result["success"] is False
+    assert result["exit_code"] != 0

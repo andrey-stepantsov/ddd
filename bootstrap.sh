@@ -1,48 +1,116 @@
 #!/bin/bash
+# tools/lib/bootstrap.sh
+# Hermetic Python Bootstrapper for Mission Pack
+
 set -e
 
-DDD_ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-REQ_FILE="$DDD_ROOT/requirements.txt"
-VENV_DIR="$DDD_ROOT/.venv"
+# get_script_dir: Resolves the directory of the sourcing script
+get_script_dir() {
+    cd "$(dirname "${BASH_SOURCE[1]}")" && pwd
+}
 
-# 1. Create Venv
-if [ ! -d "$VENV_DIR" ] || [ ! -f "$VENV_DIR/bin/pip" ]; then
-    echo "[ddd-bootstrap] Creating local environment..."
-    rm -rf "$VENV_DIR"
-    
-    python3 -m venv "$VENV_DIR" || true
+# ensure_environment: Main entry point
+# Usage: ensure_environment <path_to_deps_file> [python_version]
+ensure_environment() {
+    local DEPS_FILE="$1"
+    # Default to python3 if not specified. In real usage we might download a specific python binary.
+    # For now, we assume implicit 'python3' availability on host as the base.
+    local BASE_PYTHON="python3" 
 
-    if [ ! -f "$VENV_DIR/bin/pip" ]; then
-        # Detect Major.Minor version (e.g., "3.8")
-        PY_VER=$("$VENV_DIR/bin/python3" -c "import sys; print('%d.%d' % (sys.version_info.major, sys.version_info.minor))")
-        
-        # Default to modern URL
-        PIP_URL="https://bootstrap.pypa.io/get-pip.py"
-        
-        # Legacy overrides
-        if [[ "$PY_VER" == "3.6" ]]; then PIP_URL="https://bootstrap.pypa.io/pip/3.6/get-pip.py"; fi
-        if [[ "$PY_VER" == "3.7" ]]; then PIP_URL="https://bootstrap.pypa.io/pip/3.7/get-pip.py"; fi
-        if [[ "$PY_VER" == "3.8" ]]; then PIP_URL="https://bootstrap.pypa.io/pip/3.8/get-pip.py"; fi
-        
-        echo "⚠️  System Python ($PY_VER) missing pip. Fetching from $PIP_URL..."
-        
-        curl -sSL "$PIP_URL" -o /tmp/get-pip.py
-        "$VENV_DIR/bin/python3" /tmp/get-pip.py
-        rm /tmp/get-pip.py
+    if [ ! -f "$DEPS_FILE" ]; then
+        echo "❌ Requirements file not found: $DEPS_FILE"
+        exit 1
     fi
 
-    "$VENV_DIR/bin/pip" install --upgrade pip > /dev/null
-fi
+    # 1. Detect Host
+    local OS
+    OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+    local ARCH
+    ARCH=$(uname -m | tr '[:upper:]' '[:lower:]')
 
-# 2. Sync Dependencies
-HASH_FILE="$VENV_DIR/.req_hash"
-CURRENT_HASH=$(shasum "$REQ_FILE" 2>/dev/null || md5sum "$REQ_FILE" | awk '{print $1}')
+    # 2. Calculate Hash of Dependency File
+    # Use sha256sum or shasum depending on OS
+    local HASH
+    if command -v sha256sum >/dev/null 2>&1; then
+        HASH=$(sha256sum "$DEPS_FILE" | awk '{print $1}')
+    else 
+        # macOS usually has shasum
+        HASH=$(shasum -a 256 "$DEPS_FILE" | awk '{print $1}')
+    fi
+    # Shorten hash for readability
+    HASH=${HASH:0:12}
 
-if [ ! -f "$HASH_FILE" ] || [ "$(cat "$HASH_FILE")" != "$CURRENT_HASH" ]; then
-    echo "[ddd-bootstrap] Syncing dependencies..."
-    "$VENV_DIR/bin/pip" install -r "$REQ_FILE" > /dev/null
-    echo "$CURRENT_HASH" > "$HASH_FILE"
-fi
+    # 3. Determine Env Path
+    local MISSION_HOME="${HOME}/.mission"
+    local ENV_NAME="${OS}_${ARCH}_${HASH}"
+    local ENV_DIR="${MISSION_HOME}/envs/${ENV_NAME}"
+    
+    # Export for caller
+    export PYTHON_EXE="${ENV_DIR}/bin/python"
+    export BOOTSTRAP_ENV_DIR="${ENV_DIR}"
+    
+    # 3.5 Isolate Pip Cache
+    export XDG_CACHE_HOME="${MISSION_HOME}/cache"
+    export PIP_CACHE_DIR="${MISSION_HOME}/pip_cache"
+    export PIP_NO_WARN_SCRIPT_LOCATION=0
 
+    # 4. Check & Provision
+    if [ -f "$PYTHON_EXE" ]; then
+        # Check if we should re-validate? For speed, we trust existence = valid.
+        return 0
+    fi
+
+    echo "📦 Bootstrapping Isolated Environment..."
+    echo "   Target: $ENV_DIR"
+    echo "   Deps:   $DEPS_FILE"
+    
+    rm -rf "$ENV_DIR"
+    mkdir -p "$(dirname "$ENV_DIR")"
+    
+    # Create Venv
+    echo "   Creating Virtual Environment..."
+    "$BASE_PYTHON" -m venv "$ENV_DIR"
+    
+    # Install Dependencies
+    echo "   Installing Dependencies..."
+    # If pyproject.toml, we need to install the project itself or use poetry?
+    # For simplicity, if it's pyproject.toml, we assume 'pip install .' works or 'pip install -e .'
+    # If it's requirements.txt, 'pip install -r'
+    
+    if [[ "$DEPS_FILE" == *"pyproject.toml" ]]; then
+       # We need to be in the project root for 'pip install .' to work correctly usually
+       # or pass the directory.
+       local PROJECT_DIR
+       PROJECT_DIR=$(dirname "$DEPS_FILE")
+       
+       # Install build deps usually needed?
+       # We simply pip install the project directory.
+       # Using -e (editable) is better for dev tools? Or regular install?
+       # For tools/bin/chaos, we probably want the tool dependencies.
+       # Let's assume 'pip install .'
+       "$ENV_DIR/bin/pip" install --upgrade pip >/dev/null 2>&1
+       "$ENV_DIR/bin/pip" install "$PROJECT_DIR"
+       
+    else
+       "$ENV_DIR/bin/pip" install --upgrade pip >/dev/null 2>&1
+       "$ENV_DIR/bin/pip" install -r "$DEPS_FILE"
+    fi
+    
+    echo "✅ Environment Ready."
+}
+
+# --- Main Execution ---
+
+# 1. Setup Paths
+DDD_ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+REQ_FILE="$DDD_ROOT/requirements.txt"
+
+# 2. Bootstrap
+ensure_environment "$REQ_FILE"
+
+# 3. Launch
+# Add DDD_ROOT to PYTHONPATH
 export PYTHONPATH="${PYTHONPATH:+$PYTHONPATH:}$DDD_ROOT"
-exec "$VENV_DIR/bin/python3" "$@"
+
+# Execute arguments using the bootstrapped Python
+exec "$PYTHON_EXE" "$@"

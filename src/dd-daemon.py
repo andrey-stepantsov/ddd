@@ -81,6 +81,32 @@ class RequestHandler(FileSystemEventHandler):
             if os.path.exists(LOCK_FILE):
                 os.remove(LOCK_FILE)
 
+    def _write_artifacts(self, success, duration, raw_bytes, clean_bytes):
+        """Writes build.exit and job_result.json for external observability."""
+        exit_code = 0 if success else 1
+        
+        # 1. Atomic Exit Code
+        exit_file = os.path.join(RUN_DIR, "build.exit")
+        with open(exit_file, "w") as f:
+            f.write(str(exit_code))
+            
+        # 2. Rich Job Result
+        result = {
+            "success": success,
+            "exit_code": exit_code,
+            "duration": duration,
+            "metrics": {
+                "raw_bytes": raw_bytes,
+                "clean_bytes": clean_bytes
+            },
+            "timestamp": time.time(),
+            "pid": os.getpid()
+        }
+        
+        result_file = os.path.join(RUN_DIR, "job_result.json")
+        with open(result_file, "w") as f:
+            json.dump(result, f, indent=2)
+
     def _execute_logic(self):
         start_time = time.time()
         load_plugins(project_root=os.getcwd())
@@ -96,6 +122,7 @@ class RequestHandler(FileSystemEventHandler):
 
         total_raw_bytes = 0
         total_clean_bytes = 0
+        success = True
 
         # --- TASK 2: Sentinel Logic (Setup) ---
         sentinel_file = target.get("sentinel_file")
@@ -112,29 +139,36 @@ class RequestHandler(FileSystemEventHandler):
             
             # STAGE 1: BUILD
             build_cfg = target.get("build", {})
-            success, raw_len, clean_len = self._run_stage("BUILD", build_cfg, f_clean, f_raw)
+            build_success, raw_len, clean_len = self._run_stage("BUILD", build_cfg, f_clean, f_raw)
             total_raw_bytes += raw_len
             total_clean_bytes += clean_len
+            
+            if not build_success:
+                success = False
             
             # --- TASK 2: Sentinel Check ---
             sentinel_success = False
             if sentinel_file and os.path.exists(sentinel_file):
                 print(f"[+] Sentinel found: {sentinel_file}")
                 sentinel_success = True
-                success = True
+                success = True # Override build failure if sentinel appears (e.g. background success)
 
             if not success and not sentinel_success:
                 self._write_stats(f_clean, start_time, total_raw_bytes, total_clean_bytes)
+                self._write_artifacts(False, time.time() - start_time, total_raw_bytes, total_clean_bytes)
                 return 
 
             # STAGE 2: VERIFY
             verify_cfg = target.get("verify", {})
             if "cmd" in verify_cfg:
-                _, raw_len, clean_len = self._run_stage("VERIFY", verify_cfg, f_clean, f_raw)
+                v_success, raw_len, clean_len = self._run_stage("VERIFY", verify_cfg, f_clean, f_raw)
                 total_raw_bytes += raw_len
                 total_clean_bytes += clean_len
+                if not v_success:
+                    success = False
 
             self._write_stats(f_clean, start_time, total_raw_bytes, total_clean_bytes)
+            self._write_artifacts(success, time.time() - start_time, total_raw_bytes, total_clean_bytes)
 
         print(f"[*] Pipeline Complete.")
 
@@ -219,7 +253,74 @@ class RequestHandler(FileSystemEventHandler):
         if os.path.basename(event.src_path) == "build.request":
             self.run_pipeline()
 
+def daemonize():
+    """Double-fork daemonization routine."""
+    try:
+        pid = os.fork()
+        if pid > 0:
+            # First parent exit
+            sys.exit(0)
+    except OSError as e:
+        sys.stderr.write(f"Fork #1 failed: {e}\n")
+        sys.exit(1)
+
+    # Decouple from parent environment
+    # os.chdir("/") # DISABLED: We need to stay in project root
+    os.setsid()
+    os.umask(0)
+
+    try:
+        pid = os.fork()
+        if pid > 0:
+            # Second parent exit
+            sys.exit(0)
+    except OSError as e:
+        sys.stderr.write(f"Fork #2 failed: {e}\n")
+        sys.exit(1)
+
+    # Redirect standard file descriptors
+    sys.stdout.flush()
+    sys.stderr.flush()
+    
+    # We redirect to /dev/null by default, 
+    # but actual logs are handled by the RequestHandler writing to files.
+    # However, 'print' statements in the daemon main loop usually go to stdout.
+    # We should redirect them to daemon.log if possible, or just /dev/null.
+    # The existing client logic ensures daemon.log captures stdout if nohup used.
+    # With --daemon, we must self-manage.
+    
+    # IMPORTANT: We assume RUN_DIR exists or we can locate it?
+    # RUN_DIR is relative to source or absolute?
+    # Constants are defined at top level.
+    # RUN_DIR = os.path.join(DDD_DIR, "run") -> ".ddd/run" relative to CWD?
+    # Daemon changes CWD to "/" usually? No, we should probably stay in project root 
+    # OR resolve absolute paths first.
+    # But wait, lines 86 `os.getcwd()` implies we rely on CWD.
+    # Ideally daemon should run from PROJECT_ROOT.
+    
+    # Re-reading constants:
+    # DDD_DIR = ".ddd"
+    # This implies CWD dependency.
+    # So we MUST NOT os.chdir("/") if we rely on relative paths.
+    # OR we must resolve them to absolute before daemonizing.
+    
+    # For this implementation, we will NOT chdir("/") to preserve CWD context,
+    # assuming the daemon is launched from the project root.
+    # This is a deviation from strict daemon practice but required for this architecture.
+    pass
+
+    # Redirect logging
+    log_path = os.path.join(DDD_DIR, "daemon.log")
+    with open(log_path, 'a+') as f:
+        os.dup2(f.fileno(), sys.stdout.fileno())
+        os.dup2(f.fileno(), sys.stderr.fileno())
+
 if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--daemon", action="store_true", help="Run as a background daemon")
+    args = parser.parse_args()
+
     if not os.path.exists(DDD_DIR):
         os.makedirs(DDD_DIR)
     
@@ -227,8 +328,18 @@ if __name__ == "__main__":
         shutil.rmtree(RUN_DIR)
     os.makedirs(RUN_DIR)
     
-    print(f"[*] dd-daemon ACTIVE (v0.6.2).")
-    print(f"[*] Watching: {RUN_DIR}/build.request")
+    # Daemonize if requested
+    if args.daemon:
+        print("[*] Forking into background...")
+        daemonize()
+        # After this, we are in the background process
+        # Write PID again
+        pid_file = os.path.join(DDD_DIR, "daemon.pid")
+        with open(pid_file, 'w') as f:
+            f.write(str(os.getpid()))
+
+    print(f"[*] dd-daemon ACTIVE (v0.7.0).")
+    print(f"[*] Watching: {os.path.abspath(RUN_DIR)}/build.request")
     
     event_handler = RequestHandler()
     observer = Observer()
