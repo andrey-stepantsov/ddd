@@ -16,9 +16,7 @@
       "source .venv/bin/activate",
       "# --- 3. Sync Dependencies (Prod + Dev) ---",
       "pip install -q -r requirements.txt",
-      "pip install -q -r requirements-dev.txt",
-      "# --- 4. Subprocess Coverage Setup ---",
-      "echo 'import coverage; coverage.process_startup()' > .venv/lib/python3.11/site-packages/sitecustomize.py"
+      "pip install -q -r requirements-dev.txt"
     ],
     "scripts": {
       "test": [

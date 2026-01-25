@@ -4,6 +4,7 @@ from pathlib import Path
 
 # Ensure we can import src
 REPO_ROOT = Path(__file__).parent.parent.resolve()
+# Use src directly if package resolution fails or add root
 sys.path.insert(0, str(REPO_ROOT))
 
 from src.filters import load_plugins, REGISTRY

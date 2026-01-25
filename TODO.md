@@ -12,7 +12,7 @@
 - [ ] **Dependency Graphing (Integration)**
     - Investigate integrating `cscope` or `clang-query` to feed better context to the AI (Planned for `aider-vertex`).
 
-## ✅ Recently Completed (v0.5.0)
+## ✅ Recently Completed (v0.6.0)
 
 ### Observability
 - [x] **Build Summary Stats**

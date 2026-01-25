@@ -93,8 +93,10 @@ ensure_environment() {
        
     else
        "$ENV_DIR/bin/pip" install --upgrade pip >/dev/null 2>&1
-       "$ENV_DIR/bin/pip" install -r "$DEPS_FILE"
+       echo "   Runing pip install -v..."
+       "$ENV_DIR/bin/pip" install -v -r "$DEPS_FILE" || { echo "❌ Pip Failed"; exit 1; }
     fi
+
     
     echo "✅ Environment Ready."
 }
