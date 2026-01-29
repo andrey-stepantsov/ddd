@@ -1,6 +1,25 @@
-# Configuration Reference
+# Configuration Reference (v0.8.0)
 
 DDD uses `.ddd/config.json` to define build targets and processing pipelines.
+
+## Installation & Setup
+
+Before configuring, install DDD in your project:
+
+```bash
+# Bootstrap DDD into your project
+cd your-project
+curl -sSL https://raw.githubusercontent.com/stepants/ddd/main/bootstrap-ddd.sh | bash -s .
+```
+
+This creates:
+- `.ddd/config.json` - Build configuration (edit this)
+- `.ddd/ddd/` - Vendored DDD source
+- `.ddd/bin/` - Wrapper scripts
+- `.ddd/Makefile` - DDD make targets
+- `.ddd/run/` - Build artifacts (created on first build)
+
+See [INSTALLATION.md](INSTALLATION.md) for detailed installation options.
 
 ## Basic Structure
 
@@ -18,7 +37,7 @@ DDD uses `.ddd/config.json` to define build targets and processing pipelines.
 
 ## Target Names
 
-**Current Behavior (v0.7.0):**
+**Current Behavior (v0.8.0):**
 - The daemon always looks for a target named `"dev"` (hardcoded)
 - Only one target is active at a time
 

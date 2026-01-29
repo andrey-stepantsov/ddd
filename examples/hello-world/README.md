@@ -11,16 +11,61 @@ The simplest possible DDD setup with a C program.
 
 ## Quick Start
 
+### Option 1: Using DDD with Make Integration (Recommended)
+
+The Makefile includes DDD commands via `-include .ddd/Makefile`:
+
 ```bash
 cd examples/hello-world
 
-# Start the daemon
-dd-daemon &
+# Start the daemon (background)
+make ddd-daemon-bg
 
-# Trigger a build
-./.ddd/wait
+# Trigger a DDD build (daemon compiles via make)
+make ddd-build
 
 # Run the program
+./hello
+
+# Stop daemon
+make ddd-stop
+```
+
+### Option 2: Using DDD Standalone
+
+If you don't want to modify your project's Makefile:
+
+```bash
+cd examples/hello-world
+
+# Use the separate DDD Makefile
+make -f .ddd/Makefile ddd-daemon-bg
+make -f .ddd/Makefile ddd-build
+make -f .ddd/Makefile ddd-stop
+```
+
+### Option 3: Direct Build (Without DDD)
+
+```bash
+cd examples/hello-world
+
+# Build directly
+make
+
+# Run the program
+./hello
+```
+
+### Option 4: Direct Paths (No Make)
+
+```bash
+# Start daemon
+.ddd/bin/dd-daemon --daemon
+
+# Trigger build
+.ddd/wait
+
+# Run program
 ./hello
 ```
 
@@ -171,10 +216,10 @@ ls -la .ddd/run/
 ## Stop the Daemon
 
 ```bash
-# Find the daemon process
-ps aux | grep dd-daemon
+# Using make (recommended)
+make stop
 
-# Kill it
+# Or manually
 kill $(cat .ddd/daemon.pid)
 
 # Or use Ctrl+C if running in foreground
@@ -194,15 +239,18 @@ Once you're comfortable with this example:
 
 ## Troubleshooting
 
-### "dd-daemon: command not found"
-Add `~/.local/bin` to your PATH (see main README.md)
+### "DDD not installed"
+Run bootstrap first:
+```bash
+/path/to/ddd/bootstrap-ddd.sh .
+```
 
 ### "No such file or directory: .ddd/wait"
-The daemon creates this file on startup. Make sure daemon is running first.
+Run bootstrap to create the .ddd structure and symlinks.
 
 ### Build doesn't trigger
 - Check daemon is running: `ps aux | grep dd-daemon`
-- Check daemon logs: `cat .ddd/daemon.log`
+- Check daemon logs: `make logs` or `cat .ddd/daemon.log`
 - Manually trigger: `touch .ddd/run/build.request`
 
 ### "gcc: command not found"

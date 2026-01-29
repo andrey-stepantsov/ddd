@@ -1,7 +1,26 @@
 #!/bin/bash
+# dd-daemon - DDD Build Daemon
+# Works from both: ddd/bin/ (repo) and .ddd/ddd/bin/ (vendored)
+
+# Resolve DDD_ROOT (handle both .ddd/bin/ and .ddd/ddd/bin/)
 DIR="$(cd "$(dirname "$0")" && pwd)"
-BOOTSTRAP="$DIR/../bootstrap.sh"
-SCRIPT="$DIR/../src/dd-daemon.py"
+
+if [ -f "$DIR/../bootstrap.sh" ]; then
+    # Running from ddd/bin/ or .ddd/ddd/bin/ (original location)
+    DDD_ROOT="$DIR/.."
+elif [ -f "$DIR/../ddd/bootstrap.sh" ]; then
+    # Running from .ddd/bin/ (wrapper calling vendored copy)
+    DDD_ROOT="$DIR/../ddd"
+else
+    echo "Error: Cannot find DDD installation" >&2
+    echo "Expected bootstrap.sh at:" >&2
+    echo "  $DIR/../bootstrap.sh" >&2
+    echo "  OR $DIR/../ddd/bootstrap.sh" >&2
+    exit 1
+fi
+
+BOOTSTRAP="$DDD_ROOT/bootstrap.sh"
+SCRIPT="$DDD_ROOT/src/dd-daemon.py"
 
 # Self-Bootstrap and Run
 exec "$BOOTSTRAP" "$SCRIPT" "$@"

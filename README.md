@@ -1,6 +1,6 @@
-# DDD - Distributed Developer Daemon (v0.7.0)
+# DDD - Distributed Developer Daemon (v0.8.0)
 
-**Repository:** [github.com/andrey-stepantsov/ddd](https://github.com/andrey-stepantsov/ddd)
+**Repository:** [github.com/stepants/ddd](https://github.com/stepants/ddd)
 
 ## Overview
 
@@ -43,35 +43,37 @@ Like a spy's dead drop, DDD uses files (`.ddd/run/build.request`) to pass messag
 
 That's it. No servers, no network, just files.
 
-## 🚀 Quick Start (5 Minutes)
+## 🚀 Quick Start (3 Minutes)
 
-**New to DDD?** Get it running in 5 minutes:
+**New to DDD?** Get it running in 3 minutes with project-local installation:
 
-### Step 1: Install (2 minutes)
+### Step 1: Bootstrap DDD in Your Project (1 minute)
 
 ```bash
-git clone https://github.com/andrey-stepantsov/ddd.git
-cd ddd
-./install.sh
+cd your-project
+curl -sSL https://raw.githubusercontent.com/stepants/ddd/main/bootstrap-ddd.sh | bash -s .
 ```
 
-**Add to PATH** (if `~/.local/bin` not already in PATH):
+**Or using local copy:**
 ```bash
-export PATH="$HOME/.local/bin:$PATH"
+git clone https://github.com/stepants/ddd.git /tmp/ddd
+/tmp/ddd/bootstrap-ddd.sh your-project
 ```
 
-**Verify:**
-```bash
-which dd-daemon  # Should show: /Users/yourname/.local/bin/dd-daemon
-```
+This creates `.ddd/` directory with everything you need.
 
-### Step 2: Try the Example (2 minutes)
+### Step 2: Try the Example (1 minute)
 
 ```bash
 cd examples/hello-world
-cat .ddd/config.json    # See the configuration
-dd-daemon &             # Start daemon in background
-./.ddd/wait             # Trigger a build
+
+# Option 1: Use Makefile
+make -f .ddd/Makefile ddd-daemon-bg
+make -f .ddd/Makefile ddd-build
+
+# Option 2: Direct paths
+.ddd/bin/dd-daemon --daemon
+.ddd/wait
 ```
 
 ### Step 3: See the Results (1 minute)
@@ -85,19 +87,21 @@ cat .ddd/run/build.exit # Exit code: 0 = success
 **Success!** You've run your first DDD build.
 
 **What's Next?**
-- Try it in your own project (see Installation below)
+- Configure for your project: [CONFIG_REFERENCE.md](CONFIG_REFERENCE.md)
 - Learn about filters: [FILTERS.md](FILTERS.md)
-- Understand configuration: [CONFIG_REFERENCE.md](CONFIG_REFERENCE.md)
+- Integrate with your Makefile (see Installation below)
 
 **Troubleshooting:**
 - Daemon won't start? `cat .ddd/daemon.log`
-- Command not found? Add `~/.local/bin` to your PATH (see Prerequisites below)
+- Bootstrap failed? Check `.ddd/.gitignore` for patterns to add manually
 - Build failed? `cat .ddd/run/last_build.raw.log`
 
-## 🚀 New in v0.7.0: Project-Local Architecture
-* **Split State:** All runtime locks (`ipc.lock`) and logs (`build.log`) now live in `.ddd/run/`.
-* **Portable:** Zero-dependency installation. Just copy the `ddd` folder and run.
-* **Self-Bootstrapping:** Automatically creates its own isolated Python environment.
+## 🆕 New in v0.8.0: Project-Local Bootstrap
+* **Zero Global Install:** DDD installs locally in each project's `.ddd/` directory
+* **No Conflicts:** Each project gets its own isolated DDD installation  
+* **Makefile Integration:** Optional `-include .ddd/Makefile` for seamless integration
+* **Git Friendly:** Smart `.gitignore` updates (optional), vendored source in `.ddd/ddd/`
+* **Backward Compatible:** v0.7.x projects still work with updated binaries
 
 ## Prerequisites
 
@@ -111,50 +115,70 @@ Before installing, verify you have:
 
 ## 🛠 Installation
 
-### Option A: Automated Install (Recommended)
+### Option A: Project-Local Bootstrap (Recommended)
+
+**Best for:** Individual projects, trying DDD, no global install needed
 
 ```bash
-git clone https://github.com/andrey-stepantsov/ddd.git
-cd ddd
+cd your-project
+curl -sSL https://raw.githubusercontent.com/stepants/ddd/main/bootstrap-ddd.sh | bash -s .
+```
+
+**Or with local copy (development):**
+```bash
+LOCAL_DDD_PATH=/path/to/ddd /path/to/ddd/bootstrap-ddd.sh your-project
+```
+
+**What it creates:**
+```
+your-project/
+├── .ddd/
+│   ├── bin/              # Wrapper scripts (in PATH with direnv)
+│   ├── ddd/              # Vendored DDD source
+│   ├── run/              # Build artifacts (gitignored)
+│   ├── Makefile          # DDD make targets
+│   └── wait -> bin/ddd-wait
+```
+
+**Usage options after bootstrap:**
+
+1. **Standalone:** `make -f .ddd/Makefile ddd-daemon-bg`
+2. **Integrated:** Add `-include .ddd/Makefile` to your Makefile, then use `make ddd-daemon-bg`
+3. **Direct:** `.ddd/bin/dd-daemon --daemon`
+4. **With direnv:** Add `.ddd/bin` to PATH, then use `dd-daemon --daemon`
+
+### Option B: Git Submodule (Shared across projects)
+
+**Best for:** Multiple projects sharing one DDD version, CI/CD pipelines
+
+```bash
+cd your-project
+git submodule add https://github.com/stepants/ddd.git .ddd/ddd
+# Then run bootstrap to create wrappers
+bash .ddd/ddd/bootstrap-ddd.sh .
+```
+
+**Update DDD:**
+```bash
+git submodule update --remote .ddd/ddd
+```
+
+### Option C: Developer Install (Global)
+
+**Best for:** DDD development, testing multiple projects
+
+```bash
+git clone https://github.com/stepants/ddd.git ~/ddd
+cd ~/ddd
 ./install.sh
 ```
 
-This script will:
-1. Create a Python virtual environment (`.venv/`)
-2. Install dependencies (`watchdog`, `pytest`)
-3. Install binaries to `~/.local/bin/` (`dd-daemon`, `ddd-wait`, `ddd-test`)
+This installs binaries to `~/.local/bin/` (add to PATH if needed).
 
-**Add to PATH** (if not already):
-```bash
-# For bash
-echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
-source ~/.bashrc
-
-# For zsh (macOS default)
-echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
-source ~/.zshrc
-```
-
-**Verify installation:**
+**Verify:**
 ```bash
 which dd-daemon  # Should show: /Users/yourname/.local/bin/dd-daemon
 ```
-
-### Option B: Standalone (Manual)
-
-1.  Copy this directory to your machine (e.g., `~/tools/ddd`).
-2.  Symlink the binary:
-    ```bash
-    ln -s ~/tools/ddd/bin/dd-daemon /usr/local/bin/dd-daemon
-    ```
-    
-**Note:** Manual mode requires `bin/dd-daemon` to bootstrap Python dependencies on first run.
-
-### Option C: Mission Pack (Integrated)
-
-DDD comes pre-bundled with **Mission Core**.
-* **Daemon:** `.mission/tools/bin/dd-daemon`
-* **Client:** `.mission/tools/ddd/bin/ddd-wait`
 
 ### Troubleshooting Installation
 
@@ -177,57 +201,99 @@ Check internet connection and try:
 python3 -m pip install --user watchdog pytest
 ```
 
-## 🏗 Directory Structure
+## 🏗 Directory Structure (v0.8.0)
 
 ```text
-YourProject/
+your-project/
 ├── .ddd/
-│   ├── config.json           <-- [User] Build Configuration (see CONFIG_REFERENCE.md)
-│   ├── filters/              <-- [User] Custom Filters (optional)
-│   ├── daemon.log            <-- [System] Daemon stdout/stderr (--daemon mode)
-│   ├── daemon.pid            <-- [System] Daemon Process ID (--daemon mode)
-│   └── run/                  <-- [System] Ephemeral State (GitIgnored)
-│       ├── ipc.lock          <-- Daemon Busy Signal
-│       ├── build.request     <-- Trigger File
-│       ├── build.log         <-- Filtered Build Output
-│       ├── build.exit        <-- Exit Code (0=success, 1=failure)
-│       ├── job_result.json   <-- Rich Build Metrics
-│       └── last_build.raw.log <-- Unfiltered Original Output
-└── src/
+│   ├── bin/                   # [Generated] Wrapper scripts
+│   │   ├── dd-daemon          # → calls .ddd/ddd/bin/dd-daemon
+│   │   ├── ddd-wait           # → calls .ddd/ddd/bin/ddd-wait
+│   │   └── ddd-test           # → calls .ddd/ddd/bin/ddd-test
+│   ├── ddd/                   # [Vendored] DDD source (gitignored)
+│   │   ├── bin/               # Original binaries (smart path resolution)
+│   │   ├── src/               # Python daemon source
+│   │   ├── bootstrap.sh       # Hermetic bootstrapper
+│   │   └── ...                # Full DDD repo
+│   ├── config.json            # [User] Build configuration ✓ commit
+│   ├── filters/               # [User] Custom filters ✓ commit
+│   ├── run/                   # [Runtime] Build artifacts (gitignored)
+│   │   ├── ipc.lock           # Daemon busy signal
+│   │   ├── build.request      # Trigger file
+│   │   ├── build.log          # Filtered output
+│   │   ├── build.exit         # Exit code (0=success)
+│   │   ├── job_result.json    # Build metrics
+│   │   └── last_build.raw.log # Unfiltered output
+│   ├── daemon.log             # [Runtime] Daemon stdout/stderr (gitignored)
+│   ├── daemon.pid             # [Runtime] Daemon PID (gitignored)
+│   ├── wait -> bin/ddd-wait   # [Generated] Convenience symlink
+│   ├── Makefile               # [Generated] DDD make targets
+│   └── .gitignore             # [Reference] Patterns to add
+├── Makefile                   # [Optional] Your project Makefile
+│   # Add: -include .ddd/Makefile
+└── src/                       # Your source code
 ```
 
-## 📝 Important: Git Configuration
+**Key differences from v0.7.0:**
+- `.ddd/ddd/` - Vendored DDD source (was global in v0.7.x)
+- `.ddd/bin/` - Wrapper scripts for easy invocation
+- `.ddd/Makefile` - DDD-specific targets (no conflicts with your Makefile)
 
-### Add to .gitignore
+## 📝 Important: Git Configuration (v0.8.0)
 
-The `.ddd/run/` directory contains ephemeral build artifacts that **should not** be committed:
+### What to Commit
 
+✅ **DO commit:**
+- `.ddd/config.json` - Your build configuration
+- `.ddd/filters/` - Your custom filters
+- `.ddd/Makefile` - Generated but useful for consistency
+
+❌ **DON'T commit:**
+- `.ddd/run/` - Build artifacts (ephemeral)
+- `.ddd/ddd/` - Vendored DDD source (large, changes with updates)
+- `.ddd/daemon.log`, `.ddd/daemon.pid` - Runtime files
+- `.ddd/bin/`, `.ddd/wait` - Generated wrappers
+
+### Automatic .gitignore Update
+
+Bootstrap automatically updates `.gitignore` unless you set `DDD_UPDATE_GITIGNORE=no`.
+
+**Patterns added:**
 ```gitignore
-# DDD Runtime (ephemeral build artifacts)
+# DDD Runtime
 .ddd/run/
 .ddd/daemon.log
 .ddd/daemon.pid
+
+# DDD Vendored Source (regenerate with bootstrap)
+.ddd/ddd/
+
+# DDD Generated Files
+.ddd/bin/
+.ddd/wait
+.ddd/Makefile
 ```
 
-**Keep in git:**
-```text
-.ddd/config.json    # Your build configuration
-.ddd/filters/       # Your custom filters (if any)
-```
+### Manual Setup (If Bootstrap Skipped)
 
-**Why:** Build logs, lock files, and PIDs are machine-specific and regenerated on each build.
+If you set `DDD_UPDATE_GITIGNORE=no`, copy patterns from `.ddd/.gitignore`:
 
-### Quick Setup
-
-If starting a new project:
 ```bash
-cat >> .gitignore <<'EOF'
-# DDD
-.ddd/run/
-.ddd/daemon.log
-.ddd/daemon.pid
-EOF
+# Reference file created by bootstrap
+cat .ddd/.gitignore >> .gitignore
 ```
+
+### Why Vendor `.ddd/ddd/`?
+
+**Option 1: Gitignore (Recommended)**
+- Smaller repo size
+- Update via re-bootstrap
+- Each developer can use different DDD versions
+
+**Option 2: Commit (Alternative)**
+- Reproducible builds (locked DDD version)
+- No bootstrap needed for new clones
+- Larger repo (+~500KB)
 
 ## 🚦 Usage
 

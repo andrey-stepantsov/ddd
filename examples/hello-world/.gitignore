@@ -1,7 +1,14 @@
 # Compiled binary
 hello
 
-# DDD Runtime
+# DDD - System files (do not commit)
 .ddd/run/
 .ddd/daemon.log
 .ddd/daemon.pid
+.ddd/bin/
+.ddd/ddd/
+.ddd/wait
+
+# DDD - User files (commit these)
+# .ddd/config.json
+# .ddd/filters/
