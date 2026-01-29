@@ -1,6 +1,18 @@
 {
-  "comment": "Parasitic Mode: Build on Host, Code in Container",
-  "build_cmd": "make -j4",
-  "verify_cmd": "./tools/verify.sh",
-  "watch_dir": "."
+  "_comment": "Parasitic Mode Template (v0.7.0+): Build on Host, Code in Container",
+  "_usage": "Copy to .ddd/config.json and customize for your project",
+  "_docs": "See PARASITIC_MODE.md and CONFIG_REFERENCE.md for details",
+  
+  "targets": {
+    "dev": {
+      "build": {
+        "cmd": "make -j4",
+        "filter": "gcc_json"
+      },
+      "verify": {
+        "cmd": "./tools/verify.sh",
+        "filter": "raw"
+      }
+    }
+  }
 }
