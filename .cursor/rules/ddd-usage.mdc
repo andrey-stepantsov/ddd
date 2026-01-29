@@ -1,0 +1,359 @@
+---
+description: Comprehensive guide for using DDD (Distributed Developer Daemon) - build daemon for AI pair programming
+alwaysApply: true
+---
+
+# DDD - Distributed Developer Daemon
+
+## What is DDD?
+
+DDD is a file-based build daemon that runs builds and tests while filtering output noise. It enables AI agents in containers to trigger native builds on the host machine.
+
+**Core Concept:** File-based communication protocol (no network, no security risk)
+- User: Configures build and test commands in `.ddd/config.json`
+- AI/User: Triggers execution by touching `.ddd/run/build.request`
+- Daemon: Watches for requests, runs commands, filters output, writes results to `.ddd/run/build.log`
+
+**Key Responsibilities:**
+- **User:** Configure what commands to run (build + verify stages)
+- **DDD:** Run those commands and filter the output to hide/unhide noise
+
+**Use DDD when:**
+- Need to run builds and tests with filtered, AI-friendly output
+- AI agent is in a container but builds need to run natively (Aider, Cursor, Copilot workflows)
+- Avoiding Docker build overhead (10-50% performance gain)
+- Want to reduce compiler/test noise for better readability
+
+**Don't use DDD for:**
+- Simple local development (just run `make` or `pytest` directly)
+- Projects without builds or tests
+
+## Division of Responsibilities
+
+### Your Job (User Configuration)
+1. **Configure commands** - Tell DDD what build and test commands to run
+2. **Choose filters** - Tell DDD how to filter output (or use `"raw"` for no filtering)
+3. **Trigger builds** - Run `.ddd/wait` or touch `.ddd/run/build.request`
+
+### DDD's Job (Automated)
+1. **Run commands** - Execute your configured build and verify commands
+2. **Filter output** - Hide noise based on your filter configuration
+3. **Provide results** - Write both filtered (`.ddd/run/build.log`) and raw (`.ddd/run/last_build.raw.log`) output
+
+**Key Point:** You always have access to both filtered and raw output. Switch between them by changing the filter in config or reading different log files.
+
+## Quick Workflow
+
+### 1. Bootstrap DDD (First Time Setup)
+
+```bash
+# In project root
+curl -sSL https://raw.githubusercontent.com/stepants/ddd/main/bootstrap-ddd.sh | bash -s .
+
+# Or with local copy
+LOCAL_DDD_PATH=/path/to/ddd /path/to/ddd/bootstrap-ddd.sh .
+```
+
+This creates `.ddd/` directory with binaries, config template, and Makefile.
+
+### 2. Configure Build and Test Commands (User's Job)
+
+**You are responsible for configuring what commands DDD runs.** Edit `.ddd/config.json`:
+
+```json
+{
+  "targets": {
+    "dev": {
+      "build": {
+        "cmd": "make -j4",
+        "filter": "gcc_json"
+      },
+      "verify": {
+        "cmd": "./tests/run.sh",
+        "filter": "crash_detector"
+      }
+    }
+  }
+}
+```
+
+**Your Configuration Responsibilities:**
+- `build.cmd` (REQUIRED) - Your build command (e.g., `make`, `gcc`, `cmake --build`)
+- `verify.cmd` (OPTIONAL) - Your test command (e.g., `pytest`, `./run_tests.sh`)
+- `build.filter` / `verify.filter` (OPTIONAL) - How DDD should filter output
+
+**DDD's Responsibilities:**
+- Run your configured commands
+- Apply filters to hide/unhide noise
+- Provide both filtered (`.ddd/run/build.log`) and raw (`.ddd/run/last_build.raw.log`) output
+
+**Filter Options:**
+- `"raw"` - Show everything (no filtering)
+- `"gcc_make"` - Hide make progress noise (~30-50% reduction)
+- `"gcc_json"` - Show only structured errors (maximum noise reduction)
+- `["gcc_make", "gcc_json"]` - Chain filters for best results
+- `"crash_detector"` - Highlight crashes in test output
+- Custom filter name - Use your own filter from `.ddd/filters/`
+
+**Optional fields:**
+- `sentinel_file` - Path to success indicator for async builds
+
+### 3. Start the Daemon (DDD Starts Watching)
+
+```bash
+# Foreground (see output)
+.ddd/bin/dd-daemon
+
+# Background (detached)
+.ddd/bin/dd-daemon --daemon
+
+# Or using Makefile
+make -f .ddd/Makefile ddd-daemon-bg
+```
+
+### 4. Trigger Build/Tests (You Control When)
+
+```bash
+# Using wait client (recommended)
+.ddd/wait
+
+# Or using Makefile
+make -f .ddd/Makefile ddd-build
+
+# Manual trigger (advanced)
+touch .ddd/run/build.request
+```
+
+DDD runs your configured commands and applies filters automatically.
+
+### 5. Read Build and Test Results
+
+After build/test completes, DDD provides multiple outputs:
+
+```bash
+# Filtered output (noise hidden by your configured filter)
+cat .ddd/run/build.log
+
+# Exit code (0 = success, 1 = failure)
+cat .ddd/run/build.exit
+
+# Raw output (everything, noise NOT hidden - useful for debugging)
+cat .ddd/run/last_build.raw.log
+
+# Build metrics (duration, noise reduction stats)
+cat .ddd/run/job_result.json
+```
+
+**Typical workflow:**
+1. Check filtered output first: `cat .ddd/run/build.log`
+2. If you need more details, check raw output: `cat .ddd/run/last_build.raw.log`
+3. To permanently unhide noise, change filter to `"raw"` in config
+
+## Filters - DDD's Job to Hide/Unhide Noise
+
+**After you configure the commands, DDD handles filtering.** Filters process build and test output to hide noise and improve readability.
+
+**Important:** You always have access to both:
+- **Filtered output** - `.ddd/run/build.log` (noise hidden by filter)
+- **Raw output** - `.ddd/run/last_build.raw.log` (everything, unfiltered)
+
+**Built-in filters:**
+
+| Filter | What It Hides | What It Shows | Noise Reduction |
+|--------|---------------|---------------|-----------------|
+| `raw` | Nothing | Everything | 0% (no filtering) |
+| `gcc_make` | Make progress indicators, directory changes | Commands, errors, warnings | 30-50% |
+| `gcc_json` | Everything except errors | Structured error JSON | Maximum (AI-friendly) |
+| `crash_detector` | Nothing | Everything + crash highlights | 0% (adds highlights) |
+
+**Filter chaining:**
+
+```json
+"filter": ["gcc_make", "gcc_json"]
+```
+
+Output flows left-to-right: `raw → gcc_make → gcc_json → build.log`
+
+**How to unhide noise:** Change filter to `"raw"` or check `.ddd/run/last_build.raw.log`
+
+**Custom filters:**
+
+Create `.ddd/filters/my_filter.py`:
+
+```python
+from src.filters import register_filter
+from src.filters.base import BaseFilter
+
+@register_filter("my_filter")
+class MyFilter(BaseFilter):
+    def process(self, text):
+        # Transform text here
+        lines = text.splitlines()
+        filtered = [line for line in lines if "DEBUG" not in line]
+        return "\n".join(filtered) + "\n"
+```
+
+Use in config: `"filter": "my_filter"`
+
+## Troubleshooting
+
+**Daemon won't start:**
+```bash
+cat .ddd/daemon.log  # Check daemon errors
+ps aux | grep dd-daemon  # Check if already running
+```
+
+**Build triggered but no output:**
+```bash
+cat .ddd/run/last_build.raw.log  # Check raw output
+cat .ddd/daemon.log  # Check daemon errors
+```
+
+**Build failed but no errors shown:**
+- Try `"filter": "raw"` in config to see unfiltered output
+- Check if filter is too aggressive
+
+**"Target 'dev' not found":**
+- Verify config structure: `python3 -m json.tool .ddd/config.json`
+- Ensure `targets.dev` exists in config
+
+**Filter not working:**
+- Daemon reloads config on each build (no restart needed)
+- Check filter name spelling (case-sensitive)
+- For custom filters: verify file is in `.ddd/filters/` and doesn't start with `_`
+
+**Stop the daemon:**
+```bash
+# Foreground: Ctrl+C
+
+# Background:
+kill $(cat .ddd/daemon.pid)
+```
+
+## Best Practices
+
+1. **Always commit:**
+   - `.ddd/config.json` (your build and test configuration)
+   - `.ddd/filters/*.py` (custom filters)
+
+2. **Never commit:**
+   - `.ddd/run/` (build artifacts and logs)
+   - `.ddd/ddd/` (vendored source - large, regenerated on bootstrap)
+   - `.ddd/daemon.log`, `.ddd/daemon.pid` (runtime files)
+
+3. **Configuring commands (your job):**
+   - Use absolute or relative paths that work from project root
+   - Test commands work standalone: `bash -c "cd /path/to/project && your cmd"`
+   - Use `-j` flag with make for parallel builds
+   - Keep verify commands fast (<5s) for quick feedback
+
+4. **Filter selection (DDD's job to apply):**
+   - **For builds:** Start with `"gcc_make"` or `["gcc_make", "gcc_json"]`
+   - **For tests:** Use `"crash_detector"` or `"raw"`
+   - **When debugging:** Switch to `"raw"` to unhide all noise
+   - **Remember:** Raw output is always in `.ddd/run/last_build.raw.log`
+
+5. **Hide/unhide workflow:**
+   - Start with aggressive filtering for clean, AI-friendly output
+   - Check filtered output first: `cat .ddd/run/build.log`
+   - If you need details, read raw output: `cat .ddd/run/last_build.raw.log`
+   - Permanently unhide by changing filter to `"raw"` in config
+   - Create custom filters for project-specific noise patterns
+
+6. **Debugging:**
+   - Check raw logs first: `.ddd/run/last_build.raw.log`
+   - Test commands standalone: `bash -c "your cmd here"`
+   - Watch daemon in foreground mode (without `--daemon`)
+
+## Directory Structure
+
+```
+project/
+├── .ddd/
+│   ├── config.json          # ✓ commit - your build config
+│   ├── filters/             # ✓ commit - custom filters
+│   ├── bin/                 # generated wrappers
+│   │   ├── dd-daemon
+│   │   ├── ddd-wait
+│   │   └── ddd-test
+│   ├── ddd/                 # vendored DDD source (don't commit)
+│   ├── run/                 # build artifacts (don't commit)
+│   │   ├── build.request    # trigger file
+│   │   ├── build.log        # filtered output
+│   │   ├── build.exit       # exit code
+│   │   └── last_build.raw.log  # raw output
+│   ├── daemon.log           # daemon output (background mode)
+│   └── daemon.pid           # daemon process ID
+```
+
+## Common Patterns
+
+**Hide/unhide noise during development:**
+
+```bash
+# Start with aggressive filtering for clean output
+# config: "filter": "gcc_json"
+.ddd/wait
+cat .ddd/run/build.log  # Filtered, clean
+
+# Need more details? Check raw output without reconfiguring
+cat .ddd/run/last_build.raw.log  # Everything, unfiltered
+
+# Want to permanently unhide noise? Change config
+# config: "filter": "raw"
+.ddd/wait
+cat .ddd/run/build.log  # Now shows everything
+```
+
+**Makefile integration:**
+
+```makefile
+# Add to your project Makefile
+-include .ddd/Makefile
+
+# Then use:
+# make ddd-daemon-bg  # Start daemon in background
+# make ddd-build      # Trigger build
+# make ddd-stop       # Stop daemon
+```
+
+**CI/CD usage:**
+
+```bash
+# Trigger build and exit with its code
+.ddd/wait
+exit $(cat .ddd/run/build.exit)
+```
+
+**Custom timeout:**
+
+```bash
+# Default: 60s, override with environment variable
+DDD_TIMEOUT=120 .ddd/wait
+```
+
+**Multiple stages (build + test with different filters):**
+
+```json
+{
+  "targets": {
+    "dev": {
+      "build": {
+        "cmd": "cmake --build build --parallel",
+        "filter": ["gcc_make", "gcc_json"]
+      },
+      "verify": {
+        "cmd": "./build/run_tests",
+        "filter": "crash_detector"
+      }
+    }
+  }
+}
+```
+
+## Version Information
+
+Current: v0.8.0 (Project-local bootstrap)
+- Zero global install required
+- Each project gets isolated DDD installation in `.ddd/`
+- Backward compatible with v0.7.x projects
