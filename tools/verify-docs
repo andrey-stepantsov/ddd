@@ -1,0 +1,19 @@
+#!/bin/bash
+# verify-docs: Documentation verification wrapper
+# Uses bootstrap.sh to ensure isolated Python environment
+
+set -e
+
+DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="$(cd "$DIR/.." && pwd)"
+BOOTSTRAP="$REPO_ROOT/bootstrap.sh"
+SCRIPT="$DIR/verify_docs.py"
+
+# Verify bootstrap exists
+if [ ! -f "$BOOTSTRAP" ]; then
+    echo "Error: bootstrap.sh not found at $BOOTSTRAP"
+    exit 1
+fi
+
+# Self-Bootstrap and Run
+exec "$BOOTSTRAP" "$SCRIPT" "$@"
