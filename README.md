@@ -7,6 +7,7 @@
 ### The Problem
 
 AI coding assistants (Aider, Cursor, Copilot) need to trigger builds and read compiler output. But:
+
 - Running builds inside AI containers is **slow** (no native toolchain)
 - Mounting volumes breaks **IDE integration** (debugger, intellisense)
 - Docker adds **10-50% overhead** to every compile
@@ -14,6 +15,7 @@ AI coding assistants (Aider, Cursor, Copilot) need to trigger builds and read co
 ### The Solution
 
 DDD separates "editing code" from "building code":
+
 - **AI Agent (in container):** Edits your code, triggers builds via file
 - **DDD Daemon (on host):** Watches files, runs native builds, writes results
 - **Communication:** Simple file protocol (no network, no security risk)
@@ -55,6 +57,7 @@ curl -sSL https://raw.githubusercontent.com/stepants/ddd/main/bootstrap-ddd.sh |
 ```
 
 **Or using local copy:**
+
 ```bash
 git clone https://github.com/stepants/ddd.git /tmp/ddd
 /tmp/ddd/bootstrap-ddd.sh your-project
@@ -87,25 +90,29 @@ cat .ddd/run/build.exit # Exit code: 0 = success
 **Success!** You've run your first DDD build.
 
 **What's Next?**
+
 - Configure for your project: [CONFIG_REFERENCE.md](CONFIG_REFERENCE.md)
 - Learn about filters: [FILTERS.md](FILTERS.md)
 - Integrate with your Makefile (see Installation below)
 
 **Troubleshooting:**
+
 - Daemon won't start? `cat .ddd/daemon.log`
 - Bootstrap failed? Check `.ddd/.gitignore` for patterns to add manually
 - Build failed? `cat .ddd/run/last_build.raw.log`
 
 ## 🆕 New in v0.8.0: Project-Local Bootstrap
-* **Zero Global Install:** DDD installs locally in each project's `.ddd/` directory
-* **No Conflicts:** Each project gets its own isolated DDD installation  
-* **Makefile Integration:** Optional `-include .ddd/Makefile` for seamless integration
-* **Git Friendly:** Smart `.gitignore` updates (optional), vendored source in `.ddd/ddd/`
-* **Backward Compatible:** v0.7.x projects still work with updated binaries
+
+- **Zero Global Install:** DDD installs locally in each project's `.ddd/` directory
+- **No Conflicts:** Each project gets its own isolated DDD installation  
+- **Makefile Integration:** Optional `-include .ddd/Makefile` for seamless integration
+- **Git Friendly:** Smart `.gitignore` updates (optional), vendored source in `.ddd/ddd/`
+- **Backward Compatible:** v0.7.x projects still work with updated binaries
 
 ## Prerequisites
 
 Before installing, verify you have:
+
 - **Python 3.7+** - Check: `python3 --version`
 - **Bash shell** - macOS/Linux (Windows via WSL2)
 - **Git** - For cloning the repository
@@ -125,12 +132,14 @@ curl -sSL https://raw.githubusercontent.com/stepants/ddd/main/bootstrap-ddd.sh |
 ```
 
 **Or with local copy (development):**
+
 ```bash
 LOCAL_DDD_PATH=/path/to/ddd /path/to/ddd/bootstrap-ddd.sh your-project
 ```
 
 **What it creates:**
-```
+
+```text
 your-project/
 ├── .ddd/
 │   ├── bin/              # Wrapper scripts (in PATH with direnv)
@@ -159,6 +168,7 @@ bash .ddd/ddd/bootstrap-ddd.sh .
 ```
 
 **Update DDD:**
+
 ```bash
 git submodule update --remote .ddd/ddd
 ```
@@ -176,6 +186,7 @@ cd ~/ddd
 This installs binaries to `~/.local/bin/` (add to PATH if needed).
 
 **Verify:**
+
 ```bash
 which dd-daemon  # Should show: /Users/yourname/.local/bin/dd-daemon
 ```
@@ -183,20 +194,24 @@ which dd-daemon  # Should show: /Users/yourname/.local/bin/dd-daemon
 ### Troubleshooting Installation
 
 **"Permission denied" on install.sh:**
+
 ```bash
 chmod +x install.sh && ./install.sh
 ```
 
 **"python3: command not found":**
+
 - macOS: `brew install python3`
 - Ubuntu/Debian: `sudo apt install python3 python3-pip python3-venv`
 - Other: https://www.python.org/downloads/
 
-**"~/.local/bin not in PATH":**  
+**"~/.local/bin not in PATH":**
+
 Add to your shell config (see "Add to PATH" above)
 
-**"pip install failed":**  
+**"pip install failed":**
 Check internet connection and try:
+
 ```bash
 python3 -m pip install --user watchdog pytest
 ```
@@ -235,6 +250,7 @@ your-project/
 ```
 
 **Key differences from v0.7.0:**
+
 - `.ddd/ddd/` - Vendored DDD source (was global in v0.7.x)
 - `.ddd/bin/` - Wrapper scripts for easy invocation
 - `.ddd/Makefile` - DDD-specific targets (no conflicts with your Makefile)
@@ -244,11 +260,13 @@ your-project/
 ### What to Commit
 
 ✅ **DO commit:**
+
 - `.ddd/config.json` - Your build configuration
 - `.ddd/filters/` - Your custom filters
 - `.ddd/Makefile` - Generated but useful for consistency
 
 ❌ **DON'T commit:**
+
 - `.ddd/run/` - Build artifacts (ephemeral)
 - `.ddd/ddd/` - Vendored DDD source (large, changes with updates)
 - `.ddd/daemon.log`, `.ddd/daemon.pid` - Runtime files
@@ -259,6 +277,7 @@ your-project/
 Bootstrap automatically updates `.gitignore` unless you set `DDD_UPDATE_GITIGNORE=no`.
 
 **Patterns added:**
+
 ```gitignore
 # DDD Runtime
 .ddd/run/
@@ -285,12 +304,14 @@ cat .ddd/.gitignore >> .gitignore
 
 ### Why Vendor `.ddd/ddd/`?
 
-**Option 1: Gitignore (Recommended)**
+#### Option 1: Gitignore (Recommended)
+
 - Smaller repo size
 - Update via re-bootstrap
 - Each developer can use different DDD versions
 
-**Option 2: Commit (Alternative)**
+#### Option 2: Commit (Alternative)
+
 - Reproducible builds (locked DDD version)
 - No bootstrap needed for new clones
 - Larger repo (+~500KB)
@@ -299,44 +320,52 @@ cat .ddd/.gitignore >> .gitignore
 
 ### Basic Usage
 
-1.  **Configure Your Build:**
-    Create `.ddd/config.json` (see `CONFIG_REFERENCE.md` for details):
-    ```json
-    {
-      "targets": {
-        "dev": {
-          "build": {
-            "cmd": "make -j4",
-            "filter": "gcc_json"
-          }
-        }
+#### 1. **Configure Your Build:**
+
+Create `.ddd/config.json` (see `CONFIG_REFERENCE.md` for details):
+
+```json
+{
+  "targets": {
+    "dev": {
+      "build": {
+        "cmd": "make -j4",
+        "filter": "gcc_json"
       }
     }
-    ```
+  }
+}
+```
 
-2.  **Start the Daemon:**
-    Run `dd-daemon` in your project root. It will create `.ddd/run/` automatically.
-    ```bash
-    dd-daemon
-    ```
+#### 2. **Start the Daemon:**
 
-3.  **Trigger a Build:**
-    Run the client tool (or have your AI Agent run it):
-    ```bash
-    ./.ddd/wait
-    ```
+Run `dd-daemon` in your project root. It will create `.ddd/run/` automatically.
 
-4.  **The Protocol:**
-    * **Trigger:** Client touches `.ddd/run/build.request`.
-    * **Lock:** Daemon creates `.ddd/run/ipc.lock`.
-    * **Build:** Daemon runs the command defined in `config.json`.
-    * **Response:** Daemon writes output to `.ddd/run/build.log` and removes the lock.
+```bash
+dd-daemon
+```
+
+#### 3. **Trigger a Build:**
+
+Run the client tool (or have your AI Agent run it):
+
+```bash
+./.ddd/wait
+```
+
+#### 4.  **The Protocol:**
+
+- **Trigger:** Client touches `.ddd/run/build.request`.
+- **Lock:** Daemon creates `.ddd/run/ipc.lock`.
+- **Build:** Daemon runs the command defined in `config.json`.
+- **Response:** Daemon writes output to `.ddd/run/build.log` and removes the lock.
 
 ### Verify It Works
 
 After running `./.ddd/wait`, you should see output like this:
 
 **Terminal 1 (Daemon):**
+
 ```text
 [*] dd-daemon ACTIVE (v0.7.0).
 [*] Watching: /Users/you/project/.ddd/run/build.request
@@ -348,6 +377,7 @@ After running `./.ddd/wait`, you should see output like this:
 ```
 
 **Terminal 2 (Client):**
+
 ```text
 [ddd] Build triggered. Waiting for Daemon (Timeout: 60s)...
 ---------------------------------------------------
@@ -364,6 +394,7 @@ After running `./.ddd/wait`, you should see output like this:
 ```
 
 **Check the results:**
+
 ```bash
 ls .ddd/run/
 # Should see: build.log, build.exit, job_result.json, last_build.raw.log
@@ -377,6 +408,7 @@ cat .ddd/run/build.exit
 **Foreground mode:** Press `Ctrl+C` in the daemon terminal
 
 **Background mode:**
+
 ```bash
 kill $(cat .ddd/daemon.pid)
 ```
@@ -384,15 +416,18 @@ kill $(cat .ddd/daemon.pid)
 ### If Something Went Wrong
 
 **"Daemon did not respond":**
+
 - Check daemon is running: `ps aux | grep dd-daemon`
 - Check daemon logs: `cat .ddd/daemon.log` (if --daemon mode)
 - Restart daemon: Kill it and run `dd-daemon` again
 
 **Build failed but no errors shown:**
+
 - Check raw output: `cat .ddd/run/last_build.raw.log`
 - Try with no filter: `"filter": "raw"` in config.json
 
 **"Target 'dev' not found":**
+
 - Verify config structure: `python3 -m json.tool .ddd/config.json`
 - See [CONFIG_REFERENCE.md](CONFIG_REFERENCE.md) for correct format
 
@@ -407,6 +442,7 @@ dd-daemon --daemon
 ```
 
 **Management:**
+
 ```bash
 # Check daemon status
 cat .ddd/daemon.pid      # Process ID
@@ -439,6 +475,7 @@ After each build, the daemon generates several artifacts:
 ```
 
 **CI/CD Integration:**
+
 ```bash
 ./.ddd/wait
 exit_code=$(cat .ddd/run/build.exit)
@@ -446,6 +483,7 @@ exit $exit_code
 ```
 
 **Metrics Example** (`job_result.json`):
+
 ```json
 {
   "success": true,
@@ -465,22 +503,27 @@ exit $exit_code
 Control output processing with filters (see `FILTERS.md` for details):
 
 **Single filter:**
+
 ```json
 "filter": "gcc_json"
 ```
 
 **Chained filters:**
+
 ```json
 "filter": ["gcc_make", "gcc_json"]
 ```
 
 **No filtering (raw output):**
+
 ```json
 "filter": "raw"
 ```
 
 ## 🧪 Testing
+
 Run the self-contained test suite:
+
 ```bash
 ./bin/ddd-test
 ```
