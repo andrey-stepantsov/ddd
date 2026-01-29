@@ -1,0 +1,10 @@
+{
+  "targets": {
+    "dev": {
+      "build": {
+        "cmd": "make",
+        "filter": "raw"
+      }
+    }
+  }
+}

@@ -22,3 +22,17 @@ docker_result.log
 # --- Local Configs ---
 # Ignore local configs if you create them in the root for testing
 .dd-config
+
+# --- DDD Runtime (GitIgnored by default) ---
+# User projects should add these to their .gitignore
+.ddd/run/
+.ddd/daemon.log
+.ddd/daemon.pid
+
+# --- Examples Build Artifacts ---
+examples/hello-world/hello
+examples/**/hello
+examples/**/*.o
+examples/**/.ddd/run/
+examples/**/.ddd/daemon.log
+examples/**/.ddd/daemon.pid

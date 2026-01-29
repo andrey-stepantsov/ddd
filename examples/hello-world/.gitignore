@@ -1,0 +1,7 @@
+# Compiled binary
+hello
+
+# DDD Runtime
+.ddd/run/
+.ddd/daemon.log
+.ddd/daemon.pid
